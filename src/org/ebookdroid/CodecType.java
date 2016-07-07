@@ -3,6 +3,7 @@ package org.ebookdroid;
 import org.ebookdroid.core.codec.CodecContext;
 import org.ebookdroid.droids.cbx.CbrContext;
 import org.ebookdroid.droids.cbx.CbzContext;
+import org.ebookdroid.droids.djvu.codec.DjvuContext;
 import org.ebookdroid.droids.fb2.codec.FB2Context;
 import org.ebookdroid.droids.mupdf.codec.PdfContext;
 import org.ebookdroid.droids.mupdf.codec.XpsContext;
@@ -16,6 +17,8 @@ import java.util.Set;
 public enum CodecType {
 
     PDF(PdfContext.class, true, Arrays.asList("pdf"), Arrays.asList("application/pdf")),
+
+    DJVU(DjvuContext.class, false, Arrays.asList("djvu", "djv"), Arrays.asList("image/djvu", "image/vnd.djvu", "image/x-djvu")),
 
     XPS(XpsContext.class, true, Arrays.asList("xps", "oxps"), Arrays.asList("application/vnd.ms-xpsdocument",
             "application/oxps")),
