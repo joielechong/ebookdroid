@@ -29,7 +29,9 @@
             android:summary="@string/pref_customdpi_summary"
             android:title="@string/pref_customdpi_title" />
 
-        <org.emdev.ui.preference.SeekBarPreference
+        <EditTextPreference
+            android:maxLength="3"
+            android:numeric="integer"
             android:defaultValue="@string/pref_xdpi_defvalue"
             android:dependency="@string/pref_customdpi_id"
             android:key="@string/pref_xdpi_id"
@@ -38,7 +40,9 @@
             ebookdroid:maxValue="@string/pref_xdpi_maxvalue"
             ebookdroid:minValue="@string/pref_xdpi_minvalue" />
 
-        <org.emdev.ui.preference.SeekBarPreference
+        <EditTextPreference
+            android:maxLength="3"
+            android:numeric="integer"
             android:defaultValue="@string/pref_ydpi_defvalue"
             android:dependency="@string/pref_customdpi_id"
             android:key="@string/pref_ydpi_id"
@@ -96,7 +100,7 @@
         android:title="@string/pref_brfiletypespecificfb2_title" >
 
         <ListPreference
-            android:defaultValue="@string/pref_fb2_xmlparser_duckbill"
+            android:defaultValue="@string/pref_fb2_xmlparser_standard"
             android:entries="@array/pref_fb2_xmlparser_entries"
             android:entryValues="@array/pref_fb2_xmlparser_values"
             android:key="@string/pref_fb2_xmlparser_id"

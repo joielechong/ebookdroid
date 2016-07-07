@@ -5,9 +5,6 @@
 
     <string name="confirmclose_title">Closing viewer&#8230;</string>
     <string name="confirmclose_msg">Do you really want to close this document?</string>
-    <string name="confirmsave_msg">Would you like to save this document?</string>
-    <string name="confirmsave_yes_btn">Save and close</string>
-    <string name="confirmsave_no_btn">Close</string>
 
     <string name="error_dlg_title">Application error</string>
     <string name="msg_bad_intent">"Bad intent or scheme:\n%s"</string>
@@ -58,7 +55,6 @@
     <string name="list_clear_recent_mode_delete_book_settings">Clear all book settings</string>
     <string name="list_clear_recent_mode_delete_cached_data">Delete all cached data from disk</string>
 
-    <string name="about_prefix">en</string>
     <string name="about_title">About EBookDroid</string>
     <string name="about_commmon_title">Application info</string>
     <string name="about_fonts_title">Fonts</string>
@@ -66,7 +62,6 @@
     <string name="about_3dparty_title">Third party software</string>
     <string name="about_changelog_title">Change Log</string>
     <string name="about_thanks_title">Acknowledgments</string>
-    <string name="about_donations">Donations</string>
 
     <string name="opds">OPDS Browser</string>
     <string name="menu_opds">OPDS Browser</string>

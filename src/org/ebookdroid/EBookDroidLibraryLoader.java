@@ -23,4 +23,5 @@ public class EBookDroidLibraryLoader {
     }
 
     public static native void free();
+
 }

@@ -121,7 +121,7 @@ public class ViewState {
         this.positiveImagesInNightMode = book != null ? book.positiveImagesInNightMode : app.positiveImagesInNightMode;
         this.pageAlign = DocumentViewMode.getPageAlign(book);
         this.paint = this.nightMode ? PagePaint.NIGHT : PagePaint.DAY;
-        this.paint.bitmapPaint.setFilterBitmap(false);
+        this.paint.bitmapPaint.setFilterBitmap(app.bitmapFileringEnabled);
 
         this.zoom = zoom;
 
@@ -230,7 +230,14 @@ public class ViewState {
         return buf.toString();
     }
 
-    public class Pages extends ViewPages {
+    public class Pages {
+
+        public int currentIndex;
+        public int firstVisible;
+        public int lastVisible;
+
+        public int firstCached;
+        public int lastCached;
 
         private Pages() {
         }
@@ -262,6 +269,27 @@ public class ViewState {
 
         public Page getCurrentPage() {
             return model.getPageObject(currentIndex);
+        }
+
+        @Override
+        public String toString() {
+            final StringBuilder buf = new StringBuilder(this.getClass().getSimpleName());
+            buf.append("[");
+            toString(buf);
+            buf.append("]");
+            return buf.toString();
+        }
+
+        StringBuilder toString(final StringBuilder buf) {
+            buf.append("visible: ").append("[");
+            buf.append(firstVisible).append(", ").append(currentIndex).append(", ").append(lastVisible);
+            buf.append("]");
+            buf.append(" ");
+            buf.append("cached: ").append("[");
+            buf.append(firstCached).append(", ").append(lastCached);
+            buf.append("]");
+
+            return buf;
         }
     }
 

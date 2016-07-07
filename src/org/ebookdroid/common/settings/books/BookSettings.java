@@ -61,8 +61,6 @@ public class BookSettings implements CurrentPageListener {
 
     public int contrast = AppPreferences.CONTRAST.defValue;
 
-    public int gamma = AppPreferences.GAMMA.defValue;
-
     public int exposure = AppPreferences.EXPOSURE.defValue;
 
     public boolean autoLevels;
@@ -91,7 +89,6 @@ public class BookSettings implements CurrentPageListener {
         this.nightMode = current.nightMode;
         this.positiveImagesInNightMode = current.positiveImagesInNightMode;
         this.contrast = current.contrast;
-        this.gamma = current.gamma;
         this.exposure = current.exposure;
         this.autoLevels = current.autoLevels;
         try {
@@ -122,7 +119,6 @@ public class BookSettings implements CurrentPageListener {
         this.nightMode = current.nightMode;
         this.positiveImagesInNightMode = current.positiveImagesInNightMode;
         this.contrast = current.contrast;
-        this.gamma = current.gamma;
         this.exposure = current.exposure;
         this.autoLevels = current.autoLevels;
         try {
@@ -160,7 +156,6 @@ public class BookSettings implements CurrentPageListener {
         this.nightMode = object.getBoolean("nightMode");
         this.positiveImagesInNightMode = object.optBoolean("positiveImagesInNightMode", false);
         this.contrast = object.getInt("contrast");
-        this.gamma = object.optInt("gamma", AppPreferences.GAMMA.defValue);
         this.exposure = object.getInt("exposure");
         this.autoLevels = object.getBoolean("autoLevels");
 
@@ -195,7 +190,6 @@ public class BookSettings implements CurrentPageListener {
         obj.put("nightMode", nightMode);
         obj.put("positiveImagesInNightMode", positiveImagesInNightMode);
         obj.put("contrast", contrast);
-        obj.put("gamma", gamma);
         obj.put("exposure", exposure);
         obj.put("autoLevels", autoLevels);
 
@@ -255,10 +249,9 @@ public class BookSettings implements CurrentPageListener {
         private static final short D_AutoLevels = 0x0001 << 10;
         private static final short D_PositiveImagesInNightMode = 0x0001 << 11;
         private static final short D_Rotation = 0x0001 << 12;
-        private static final short D_Gamma = 0x0001 << 13;
 
         private static final short D_Effects = D_Contrast | D_Exposure | D_NightMode | D_PositiveImagesInNightMode
-                | D_AutoLevels | D_Gamma;
+                | D_AutoLevels;
 
         private short mask;
         private final boolean firstTime;
@@ -288,9 +281,6 @@ public class BookSettings implements CurrentPageListener {
                 }
                 if (olds.contrast != news.contrast) {
                     mask |= D_Contrast;
-                }
-                if (olds.gamma != news.gamma) {
-                    mask |= D_Gamma;
                 }
                 if (olds.exposure != news.exposure) {
                     mask |= D_Exposure;
@@ -337,10 +327,6 @@ public class BookSettings implements CurrentPageListener {
 
         public boolean isContrastChanged() {
             return 0 != (mask & D_Contrast);
-        }
-
-        public boolean isGammaChanged() {
-            return 0 != (mask & D_Gamma);
         }
 
         public boolean isExposureChanged() {

@@ -80,32 +80,32 @@
 
     <target name="-svn-checkout-changelog">
         <svn javahl="false">
-            <export srcurl="${changelog.url}" destpath="assets/about/en/changelog.wiki" />
+            <export srcurl="http://ebookdroid.googlecode.com/svn/wiki/ChangeLog_legacy.wiki" destpath="assets/about_changelog.wiki" />
         </svn>
     </target>
 
     <target name="-check-release-version">
         <condition property="legal.version.code">
-            <matches string="${package.version.code}" pattern="${release.version.code.pattern}"/>
+            <matches string="${package.version.code}" pattern="^\d{3,}8$"/>
         </condition>
-        <fail unless="legal.version.code" message="${release.version.code.msg}" />
+        <fail unless="legal.version.code" message="Release version code must be ended with 8" />
 
         <condition property="legal.version.name">
-            <matches string="${package.version.name}" pattern="${release.version.name.pattern}"/>
+            <matches string="${package.version.name}" pattern="^\d[.\d]+\d$"/>
         </condition>
-        <fail unless="legal.version.name" message="${release.version.name.msg}" />
+        <fail unless="legal.version.name" message="Release version name must contains only digits and points" />
     </target>
 
     <target name="-check-dev-version">
         <condition property="legal.version.code">
-            <matches string="${package.version.code}" pattern="${dev.version.code.pattern}"/>
+            <matches string="${package.version.code}" pattern="^\d{3,}9$"/>
         </condition>
-        <fail unless="legal.version.code" message="${dev.version.code.msg}" />
+        <fail unless="legal.version.code" message="Development version code must be ended with 9" />
 
         <condition property="legal.version.name">
-            <matches string="${package.version.name}" pattern="${dev.version.name.pattern}"/>
+            <matches string="${package.version.name}" pattern="^\d[.\d]+\d-dev$"/>
         </condition>
-        <fail unless="legal.version.name" message="${dev.version.name.msg}" />
+        <fail unless="legal.version.name" message="Development version name must contains digits and points ended with -dev suffix" />
     </target>
 
     <target name="-prepare-dev" depends="-check-dev-version, -svn-force-update, -svn-get-revision, -svn-checkout-changelog">

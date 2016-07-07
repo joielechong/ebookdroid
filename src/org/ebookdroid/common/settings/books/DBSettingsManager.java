@@ -23,7 +23,7 @@ public class DBSettingsManager extends SQLiteOpenHelper implements IDBAdapter, I
 
     public static final String BACKUP_KEY = "recent-books";
 
-    public static final int DB_VERSION = 8;
+    public static final int DB_VERSION = 7;
 
     private final IDBAdapter adapter;
 
@@ -77,10 +77,8 @@ public class DBSettingsManager extends SQLiteOpenHelper implements IDBAdapter, I
             case DBAdapterV6.VERSION:
                 return new DBAdapterV6(this);
             case DBAdapterV7.VERSION:
-                return new DBAdapterV7(this);
-            case DBAdapterV8.VERSION:
             default:
-                return new DBAdapterV8(this);
+                return new DBAdapterV7(this);
         }
     }
 
@@ -98,7 +96,6 @@ public class DBSettingsManager extends SQLiteOpenHelper implements IDBAdapter, I
         }
     }
 
-    @Override
     public void onDowngrade(final SQLiteDatabase db, final int oldVersion, final int newVersion) {
         upgragingInstance = db;
         LCTX.i("Downgrading from version " + oldVersion + " to version " + newVersion);

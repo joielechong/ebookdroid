@@ -90,7 +90,7 @@ public class VTDExParser {
                 if (tag.processText && !handler.skipCharacters()) {
                     final char[] buf = nav.toRawString(ci, range);
                     if (text ==null) {
-                        text = new TextProvider(buf);
+                        text = new TextProvider(true, buf);
                     }
                     handler.characters(text, range[0], range[1]);
                 }

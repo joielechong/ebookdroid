@@ -1,7 +1,6 @@
 package org.emdev.common.filesystem;
 
 import static android.os.FileObserver.CLOSE_WRITE;
-import static android.os.FileObserver.CREATE;
 import static android.os.FileObserver.DELETE;
 import static android.os.FileObserver.MOVED_FROM;
 import static android.os.FileObserver.MOVED_TO;
@@ -15,10 +14,8 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.emdev.common.cache.CacheManager;
@@ -27,7 +24,6 @@ import org.emdev.common.log.LogManager;
 import org.emdev.ui.actions.EventDispatcher;
 import org.emdev.ui.actions.InvokationType;
 import org.emdev.ui.tasks.AsyncTask;
-import org.emdev.utils.FileUtils;
 import org.emdev.utils.LengthUtils;
 import org.emdev.utils.StringUtils;
 
@@ -35,7 +31,7 @@ public class FileSystemScanner {
 
     private static final LogContext LCTX = LogManager.root().lctx("FileSystemScanner", false);
 
-    private static final int EVENT_MASK = CREATE | CLOSE_WRITE | MOVED_TO | DELETE | MOVED_FROM;
+    private static final int EVENT_MASK = CLOSE_WRITE | MOVED_TO | DELETE | MOVED_FROM;
 
     final EventDispatcher listeners;
     final AtomicBoolean inScan = new AtomicBoolean();
@@ -109,64 +105,12 @@ public class FileSystemScanner {
         }
     }
 
-    public void stopObservers(final String path) {
-        final String mpath = FileUtils.invertMountPrefix(path);
-        final String ap = path + "/";
-        final String mp = mpath != null ? mpath + "/" : null;
-
-        synchronized (observers) {
-            final Iterator<Entry<File, FileObserver>> iter = observers.entrySet().iterator();
-            while (iter.hasNext()) {
-                final Entry<File, FileObserver> next = iter.next();
-                final File file = next.getKey();
-                final String filePath = file.getAbsolutePath();
-                final boolean eq = filePath.startsWith(ap) || filePath.equals(path) || mpath != null
-                        && (filePath.startsWith(mp) || filePath.equals(mpath));
-                if (eq) {
-                    next.getValue().stopWatching();
-                    iter.remove();
-                }
-            }
-        }
-    }
-
     public void addListener(final Object listener) {
         listeners.addListener(listener);
     }
 
     public void removeListener(final Object listener) {
         listeners.removeListener(listener);
-    }
-
-    public static String toString(final int event) {
-        switch (event) {
-            case FileObserver.ACCESS:
-                return "ACCESS";
-            case FileObserver.MODIFY:
-                return "MODIFY";
-            case FileObserver.ATTRIB:
-                return "ATTRIB";
-            case FileObserver.CLOSE_WRITE:
-                return "CLOSE_WRITE";
-            case FileObserver.CLOSE_NOWRITE:
-                return "CLOSE_NOWRITE";
-            case FileObserver.OPEN:
-                return "OPEN";
-            case FileObserver.MOVED_FROM:
-                return "MOVED_FROM";
-            case FileObserver.MOVED_TO:
-                return "MOVED_TO";
-            case FileObserver.CREATE:
-                return "CREATE";
-            case FileObserver.DELETE:
-                return "DELETE";
-            case FileObserver.DELETE_SELF:
-                return "DELETE_SELF";
-            case FileObserver.MOVE_SELF:
-                return "MOVE_SELF";
-            default:
-                return "0x" + Integer.toHexString(event);
-        }
     }
 
     class ScanTask extends AsyncTask<String, String, Void> {
@@ -222,7 +166,7 @@ public class FileSystemScanner {
 
             try {
                 final File cd = CacheManager.getCacheDir();
-                if (cd != null && dir.getCanonicalPath().equals(cd.getCanonicalPath())) {
+                if (dir.getCanonicalPath().equals(cd.getCanonicalPath())) {
                     LCTX.d("Skip file cache: " + dir);
                     return;
                 }
@@ -282,7 +226,7 @@ public class FileSystemScanner {
         }
     }
 
-    class FileObserverImpl extends FileObserver {
+    public class FileObserverImpl extends FileObserver {
 
         private final File folder;
 
@@ -301,19 +245,7 @@ public class FileSystemScanner {
             final boolean isDirectory = f.isDirectory();
             final Listener l = listeners.getListener();
 
-            int actualEvent = event & ALL_EVENTS;
-            LCTX.d("0x" + Integer.toHexString(event) + " " + FileSystemScanner.toString(actualEvent) + ": "
-                    + f.getAbsolutePath());
-
-            switch (actualEvent) {
-                case CREATE:
-                    if (isDirectory) {
-                        l.onDirAdded(folder, f);
-                        getObserver(f).startWatching();
-                    } else {
-                        // Ignore file creation, wait for data writing
-                    }
-                    break;
+            switch (event) {
                 case CLOSE_WRITE:
                 case MOVED_TO:
                     if (isDirectory) {
@@ -336,6 +268,7 @@ public class FileSystemScanner {
                     break;
             }
         }
+
     }
 
     public static interface Listener {

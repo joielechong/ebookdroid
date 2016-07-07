@@ -7,7 +7,6 @@ import org.ebookdroid.droids.fb2.codec.tags.FB2TagId;
 
 import java.util.ArrayList;
 
-import org.emdev.common.fonts.data.FontStyle;
 import org.emdev.common.lang.StrBuilder;
 import org.emdev.common.textmarkup.JustificationMode;
 import org.emdev.common.textmarkup.MarkupElement;
@@ -25,6 +24,7 @@ import org.emdev.common.textmarkup.MarkupTitle;
 import org.emdev.common.textmarkup.RenderingStyle;
 import org.emdev.common.textmarkup.RenderingStyle.Script;
 import org.emdev.common.textmarkup.TextStyle;
+import org.emdev.common.textmarkup.Words;
 import org.emdev.common.textmarkup.line.LineFixedWhiteSpace;
 import org.emdev.common.textmarkup.line.LineWhiteSpace;
 import org.emdev.common.textmarkup.line.TextElement;
@@ -48,7 +48,6 @@ public class StandardHandler extends BaseHandler implements IContentHandler, FB2
     protected boolean parsingNotes = false;
     protected boolean parsingBinary = false;
     protected boolean inTitle = false;
-    protected boolean inEpigraph = false;
     protected boolean inCite = false;
     protected boolean noteFirstWord = true;
     protected boolean parseNotesInParagraphs = false;
@@ -70,13 +69,20 @@ public class StandardHandler extends BaseHandler implements IContentHandler, FB2
 
     protected MarkupTable currentTable;
 
+    protected boolean useUniqueTextElements;
+
     private boolean parsingPreformatted = false;
     private int parsingPreformattedLevel = -1;
     private int parsingPreformattedLines = 0;
     protected int tagLevel = 0;
 
     public StandardHandler(final ParsedContent content) {
+        this(content, true);
+    }
+
+    public StandardHandler(final ParsedContent content, final boolean useUniqueTextElements) {
         super(content);
+        this.useUniqueTextElements = useUniqueTextElements;
     }
 
     @Override
@@ -225,7 +231,7 @@ public class StandardHandler extends BaseHandler implements IContentHandler, FB2
                         markupStream.add(MarkupNoSpace.E);
                         markupStream.add(MarkupNoLineBreak.E);
                         markupStream.add(new TextElement(prettyNote.toCharArray(), 0, prettyNote.length(),
-                                new RenderingStyle(parsedContent, crs, Script.SUPER)));
+                                new RenderingStyle(crs, Script.SUPER)));
                         markupStream.add(new MarkupNote(note));
                         skipContent = true;
                     }
@@ -259,7 +265,6 @@ public class StandardHandler extends BaseHandler implements IContentHandler, FB2
                 setEmphasisStyle();
                 break;
             case EPIGRAPH:
-                inEpigraph = true;
                 markupStream.add(MarkupParagraphEnd.E);
                 markupStream.add(setEpigraphStyle().jm);
                 break;
@@ -342,9 +347,6 @@ public class StandardHandler extends BaseHandler implements IContentHandler, FB2
                 markupStream.add(new MarkupExtraSpace(-(int) (crs.paint.pOffset.width * ulLevel)));
             case P:
                 if (!skipContent) {
-                    if (crs.face.style != FontStyle.REGULAR && !inEpigraph) {
-                        crs = new RenderingStyle(parsedContent, crs, FontStyle.REGULAR);
-                    }
                     markupStream.add(MarkupParagraphEnd.E);
                 }
                 paragraphParsing = false;
@@ -452,7 +454,6 @@ public class StandardHandler extends BaseHandler implements IContentHandler, FB2
                 break;
             case EPIGRAPH:
                 markupStream.add(setPrevStyle().jm);
-                inEpigraph = false;
                 break;
             case COVERPAGE:
                 cover = false;
@@ -499,15 +500,27 @@ public class StandardHandler extends BaseHandler implements IContentHandler, FB2
     @Override
     public void characters(final TextProvider text, final int start, final int length) {
         if (parsingBinary) {
-            if (tmpBinary == null) {
-                tmpBinary = text.chars;
-                tmpBinaryStart = start;
-                tmpBinaryLength = length;
+            if (text.persistent) {
+                if (tmpBinary == null) {
+                    tmpBinary = text.chars;
+                    tmpBinaryStart = start;
+                    tmpBinaryLength = length;
+                } else {
+                    tmpBinaryLength += length;
+                }
             } else {
-                tmpBinaryLength += length;
+                if (tmpBinaryContent == null) {
+                    tmpBinaryContent = new StrBuilder(length);
+                }
+                tmpBinaryContent.append(text.chars, start, length);
             }
+
         } else {
-            processText(text, start, length);
+            if (text.persistent) {
+                processText(text, start, length);
+            } else {
+                tmpTagContent.append(text.chars, start, length);
+            }
         }
     }
 
@@ -517,7 +530,7 @@ public class StandardHandler extends BaseHandler implements IContentHandler, FB2
         final int start = 0;
         final char[] ch = tmpTagContent.getValue();
 
-        processText(new TextProvider(ch), start, length);
+        processText(new TextProvider(false, ch), start, length);
 
         tmpTagContent.setLength(0);
     }
@@ -575,11 +588,26 @@ public class StandardHandler extends BaseHandler implements IContentHandler, FB2
     }
 
     protected TextElement text(final TextProvider text, final int st, final int len, final RenderingStyle style) {
-        return new TextElement(text.chars, st, len, style);
+        if (!useUniqueTextElements && text.persistent) {
+            return new TextElement(text.chars, st, len, style);
+        }
+
+        Words w = parsedContent.words.get(style.paint.key);
+        if (w == null) {
+            w = new Words();
+            parsedContent.words.append(style.paint.key, w);
+        }
+        return w.get(text, st, len, style);
+
     }
 
     protected TextElement textPre(final TextProvider text, final int st, final int len, final RenderingStyle style) {
-        return new TextPreElement(text.chars, st, len, style);
+        if (text.persistent) {
+            return new TextPreElement(text.chars, st, len, style);
+        }
+        final char[] chars = new char[len];
+        System.arraycopy(text.chars, st, chars, 0, len);
+        return new TextPreElement(chars, 0, len, style);
     }
 
 }

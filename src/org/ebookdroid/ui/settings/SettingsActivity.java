@@ -1,6 +1,5 @@
 package org.ebookdroid.ui.settings;
 
-import org.ebookdroid.EBookDroidApp;
 import org.ebookdroid.R;
 import org.ebookdroid.common.settings.AppSettings;
 import org.ebookdroid.common.settings.SettingsManager;
@@ -13,6 +12,7 @@ import android.preference.PreferenceManager;
 import android.preference.PreferenceScreen;
 
 import org.emdev.common.filesystem.PathFromUri;
+import org.emdev.common.fonts.FontManager;
 
 public class SettingsActivity extends BaseSettingsActivity {
 
@@ -20,7 +20,7 @@ public class SettingsActivity extends BaseSettingsActivity {
     protected final void onCreate(final Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        EBookDroidApp.initFonts();
+        FontManager.init();
 
         final Uri uri = getIntent().getData();
         if (uri != null) {
@@ -40,7 +40,6 @@ public class SettingsActivity extends BaseSettingsActivity {
         super.onPause();
     }
 
-    @SuppressWarnings("deprecation")
     protected void onCreate() {
         try {
             setPreferenceScreen(createPreferences());
@@ -58,7 +57,6 @@ public class SettingsActivity extends BaseSettingsActivity {
         decorator.decorateSettings();
     }
 
-    @SuppressWarnings("deprecation")
     PreferenceScreen createPreferences() {
         final PreferenceScreen root = getPreferenceManager().createPreferenceScreen(this);
 
@@ -67,18 +65,15 @@ public class SettingsActivity extends BaseSettingsActivity {
         loadPreferences(root, R.xml.fragment_ui);
         loadPreferences(root, R.xml.fragment_scroll);
         loadPreferences(root, R.xml.fragment_navigation);
-        loadPreferences(root, R.xml.fragment_performance);
+        loadPreferences(root, R.xml.fragment_memory);
         loadPreferences(root, R.xml.fragment_render);
         loadPreferences(root, R.xml.fragment_typespec);
         loadPreferences(root, R.xml.fragment_browser);
-        loadPreferences(root, R.xml.fragment_opds);
-
         loadPreferences(root, R.xml.fragment_backup);
 
         return root;
     }
 
-    @SuppressWarnings("deprecation")
     void loadPreferences(final PreferenceScreen root, final int... resourceIds) {
         for (final int id : resourceIds) {
             setPreferenceScreen(null);

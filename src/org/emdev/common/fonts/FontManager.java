@@ -1,10 +1,13 @@
 package org.emdev.common.fonts;
 
+import org.ebookdroid.EBookDroidApp;
+
 import android.util.SparseArray;
 
 import java.io.File;
 import java.lang.ref.WeakReference;
 
+import org.emdev.common.android.AndroidVersion;
 import org.emdev.common.fonts.data.FontFamilyType;
 import org.emdev.common.fonts.data.FontInfo;
 import org.emdev.common.fonts.data.FontPack;
@@ -17,20 +20,30 @@ public class FontManager {
 
     public static SystemFontProvider system;
     public static AssetsFontProvider assets;
-    public static ExtStorageFontProvider external;
+    public static BaseExtStorageFontProvider external;
 
     private static final SparseArray<WeakReference<TypefaceEx>> fonts = new SparseArray<WeakReference<TypefaceEx>>();
 
-    public static void init(final File storage) {
+    public static void init() {
         try {
-            system = new SystemFontProvider();
-            assets = new AssetsFontProvider();
+        system = new SystemFontProvider();
+        assets = new AssetsFontProvider();
 
-            external = new ExtStorageFontProvider(storage);
+        try {
+            Class<?> classESFP = null;
+            if(AndroidVersion.VERSION < 4) {
+                classESFP = Class.forName(FontManager.class.getPackage().getName() +".BaseExtStorageFontProvider");
+            } else {
+                classESFP = Class.forName(FontManager.class.getPackage().getName() +".ExtStorageFontProvider");
+            }
+            external = (BaseExtStorageFontProvider) classESFP.getConstructor(File.class).newInstance(EBookDroidApp.APP_STORAGE);
+        } catch (Throwable ex) {
+            ex.printStackTrace();
+        }
 
-            system.init();
-            assets.init();
-            external.init();
+        system.init();
+        assets.init();
+        external.init();
         } catch (VerifyError ex) {
             ex.printStackTrace();
             throw ex;

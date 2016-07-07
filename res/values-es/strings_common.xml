@@ -4,9 +4,6 @@
 <!--<string name="app_name">"EBookDroid"</string>-->
     <string name="confirmclose_title">"Cerrando visor…"</string>
     <string name="confirmclose_msg">"¿Realmente quieres cerrar el visor?"</string>
-<!--<string name="confirmsave_msg">"Would you like to save this document?"</string>-->
-<!--<string name="confirmsave_yes_btn">"Save and close"</string>-->
-<!--<string name="confirmsave_no_btn">"Close"</string>-->
     <string name="error_dlg_title">"Error en la aplicación"</string>
     <string name="msg_bad_intent">"Intent o esquema erróneos:\n%s"</string>
     <string name="msg_no_intent_data">"No hay datos en el Intent:\n%s"</string>
@@ -43,7 +40,6 @@
     <string name="list_clear_recent_mode_delete_bookmarks">"Eliminar todos los marcadores"</string>
     <string name="list_clear_recent_mode_delete_book_settings">"Eliminar todos los ajustes de los libros"</string>
     <string name="list_clear_recent_mode_delete_cached_data">"Eliminar todos los archivos almacenados en caché"</string>
-<!--<string name="about_prefix">"en"</string>-->
     <string name="about_title">"Acerca del programa"</string>
     <string name="about_commmon_title">"Información general"</string>
     <string name="about_fonts_title">"Fuentes"</string>
@@ -51,7 +47,6 @@
     <string name="about_3dparty_title">"Software de terceros"</string>
     <string name="about_changelog_title">"Modificaciones"</string>
     <string name="about_thanks_title">"Agradecimientos"</string>
-<!--<string name="about_donations">"Donations"</string>-->
     <string name="opds">"Navegador OPDS"</string>
     <string name="menu_opds">"Navegador OPDS"</string>
     <string name="opds_connecting">"Conectando…"</string>

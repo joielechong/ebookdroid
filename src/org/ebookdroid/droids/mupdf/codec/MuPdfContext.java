@@ -4,6 +4,8 @@ import org.ebookdroid.EBookDroidLibraryLoader;
 import org.ebookdroid.common.settings.AppSettings;
 import org.ebookdroid.core.codec.AbstractCodecContext;
 
+import android.graphics.Bitmap;
+
 import java.util.Arrays;
 
 import org.emdev.common.fonts.FontManager;
@@ -17,8 +19,11 @@ public abstract class MuPdfContext extends AbstractCodecContext {
     public static final LogContext LCTX = LogManager.root().lctx("MuPdf");
 
     public static final int MUPDF_FEATURES = FEATURE_CACHABLE_PAGE_INFO | FEATURE_EMBEDDED_OUTLINE
-            | FEATURE_PAGE_TEXT_SEARCH | FEATURE_POSITIVE_IMAGES_IN_NIGHT_MODE | FEATURE_CROP_SUPPORT
-            | FEATURE_SPLIT_SUPPORT;
+            | FEATURE_PAGE_TEXT_SEARCH | FEATURE_POSITIVE_IMAGES_IN_NIGHT_MODE;
+
+    public static final Bitmap.Config BITMAP_CFG = Bitmap.Config.RGB_565;
+
+    public static final Bitmap.Config NATIVE_BITMAP_CFG = Bitmap.Config.ARGB_8888;
 
     static {
         EBookDroidLibraryLoader.load();
@@ -26,9 +31,7 @@ public abstract class MuPdfContext extends AbstractCodecContext {
 
     public MuPdfContext() {
         super(MUPDF_FEATURES);
-    }
 
-    public void setExternalFonts() {
         final AppSettings app = AppSettings.current();
 
         final String[] monoFonts = FontManager.getExternalFonts(app.monoFontPack, FontFamilyType.MONO);
@@ -58,6 +61,11 @@ public abstract class MuPdfContext extends AbstractCodecContext {
                 FontStyle.REGULAR);
         LCTX.d("Dingbat font: " + dingbatFont);
         setDingbatFont(dingbatFont);
+    }
+
+    @Override
+    public Bitmap.Config getBitmapConfig() {
+        return BITMAP_CFG;
     }
 
     private static native void setMonoFonts(String regular, String italic, String bold, String boldItalic);

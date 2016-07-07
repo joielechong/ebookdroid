@@ -3,7 +3,6 @@ package org.ebookdroid;
 import org.ebookdroid.core.codec.CodecContext;
 import org.ebookdroid.droids.cbx.CbrContext;
 import org.ebookdroid.droids.cbx.CbzContext;
-import org.ebookdroid.droids.djvu.codec.DjvuContext;
 import org.ebookdroid.droids.fb2.codec.FB2Context;
 import org.ebookdroid.droids.mupdf.codec.PdfContext;
 import org.ebookdroid.droids.mupdf.codec.XpsContext;
@@ -14,13 +13,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.emdev.utils.LengthUtils;
-
 public enum CodecType {
 
     PDF(PdfContext.class, true, Arrays.asList("pdf"), Arrays.asList("application/pdf")),
-
-    DJVU(DjvuContext.class, false, Arrays.asList("djvu", "djv"), Arrays.asList("image/djvu", "image/vnd.djvu", "image/x-djvu")),
 
     XPS(XpsContext.class, true, Arrays.asList("xps", "oxps"), Arrays.asList("application/vnd.ms-xpsdocument",
             "application/oxps")),
@@ -79,9 +74,6 @@ public enum CodecType {
     }
 
     public static CodecType getByUri(final String uri) {
-        if (LengthUtils.isEmpty(uri)) {
-            return null;
-        }
         final String uriString = uri.toLowerCase();
         for (final String ext : extensionToActivity.keySet()) {
             if (uriString.endsWith("." + ext)) {

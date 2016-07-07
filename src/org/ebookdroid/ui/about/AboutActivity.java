@@ -17,11 +17,9 @@ import android.widget.BaseExpandableListAdapter;
 import android.widget.ExpandableListView;
 import android.widget.TextView;
 
-import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 
-import org.emdev.utils.CompareUtils;
 import org.emdev.utils.LayoutUtils;
 import org.emdev.utils.LengthUtils;
 import org.emdev.utils.wiki.Wiki;
@@ -30,13 +28,12 @@ public class AboutActivity extends Activity {
 
     private static final Part[] PARTS = {
             // Start
-            new Part(R.string.about_commmon_title, Format.HTML, "common.html"),
-            new Part(R.string.about_fonts_title, Format.HTML, "fonts.html"),
-            new Part(R.string.about_license_title, Format.HTML, "license.html"),
-            new Part(R.string.about_3dparty_title, Format.HTML, "3rdparty.html"),
-            new Part(R.string.about_changelog_title, Format.WIKI, "changelog.wiki"),
-            new Part(R.string.about_thanks_title, Format.HTML, "thanks.html"),
-            new Part(R.string.about_donations, Format.HTML, "donations.html"),
+            new Part(R.string.about_commmon_title, Format.HTML, "about_common.html"),
+            new Part(R.string.about_fonts_title, Format.HTML, "about_fonts.html"),
+            new Part(R.string.about_license_title, Format.HTML, "about_license.html"),
+            new Part(R.string.about_3dparty_title, Format.HTML, "about_3rdparty.html"),
+            new Part(R.string.about_changelog_title, Format.WIKI, "about_changelog.wiki"),
+            new Part(R.string.about_thanks_title, Format.HTML, "about_thanks.html"),
     // End
     };
 
@@ -72,7 +69,6 @@ public class AboutActivity extends Activity {
         final Format format;
         final String fileName;
         CharSequence content;
-        String actualFileName;
 
         public Part(final int labelId, final Format format, final String fileName) {
             this.labelId = labelId;
@@ -81,21 +77,11 @@ public class AboutActivity extends Activity {
         }
 
         public CharSequence getContent(final Context context) {
-            final String aName = getActualFileName(context);
-            if (content == null || !CompareUtils.equals(aName, actualFileName)) {
-                content = null;
-                actualFileName = null;
+            if (content == null) {
                 try {
-                    InputStream input;
-                    try {
-                        input = context.getAssets().open(aName);
-                        actualFileName = aName;
-                    } catch (final FileNotFoundException e) {
-                        actualFileName = getDefaultFileName();
-                        input = context.getAssets().open(actualFileName);
-                    }
+                    final InputStream input = context.getAssets().open(fileName);
                     final int size = input.available();
-                    final byte[] buffer = new byte[size];
+                    byte[] buffer = new byte[size];
                     input.read(buffer);
                     input.close();
                     final String text = new String(buffer, "UTF8");
@@ -107,24 +93,6 @@ public class AboutActivity extends Activity {
             }
             return content;
         }
-
-        public String getActualFileName(final Context context) {
-            return getActualFileName(context.getString(R.string.about_prefix));
-        }
-
-        public String getDefaultFileName() {
-            return getActualFileName("en");
-        }
-
-        public String getActualFileName(final String lang) {
-            final StringBuilder actualName = new StringBuilder("about");
-            actualName.append("/").append(lang);
-            actualName.append("/");
-            actualName.append(fileName);
-            final String s = actualName.toString();
-            return s;
-        }
-
     }
 
     public class PartsAdapter extends BaseExpandableListAdapter {
@@ -188,7 +156,7 @@ public class AboutActivity extends Activity {
             } else {
                 view = ((WebView) convertView);
             }
-            final CharSequence content = getChild(groupPosition, childPosition).getContent(AboutActivity.this);
+            CharSequence content = getChild(groupPosition, childPosition).getContent(AboutActivity.this);
             view.loadDataWithBaseURL("file:///fake/not_used", content.toString(), "text/html", "UTF-8", "");
             view.setBackgroundColor(Color.GRAY);
             return view;

@@ -140,12 +140,10 @@ public class DocumentCacheFile extends File {
 
         void saveCodePageInfo(final DataOutputStream out) throws IOException {
             for (final PageInfo info : this.docPages) {
-                if (info.info != null) {
-                    out.writeByte(TAG_CODEC_PAGE_INFO);
-                    out.writeShort(info.index);
-                    out.writeInt(info.info.width);
-                    out.writeInt(info.info.height);
-                }
+                out.writeByte(TAG_CODEC_PAGE_INFO);
+                out.writeShort(info.index);
+                out.writeInt(info.info.width);
+                out.writeInt(info.info.height);
             }
         }
 

@@ -1,0 +1,4 @@
+C:/workspace_adt_mars/mupdf19a/jni/vudroid/pdfdroidbridge.c:44: error: undefined reference to 'fz_cpudetect'
+C:/workspace_adt_mars/mupdf19a/jni/vudroid/pdfdroidbridge.c:45: error: undefined reference to 'fz_accelerate'
+C:/workspace_adt_mars/mupdf19a/jni/vudroid/pdfdroidbridge.c:196: error: undefined reference to 'pdf_getpagecount'
+C:/workspace_adt_mars/mupdf19a/jni/vudroid/pdfdroidbridge.c:242: error: undefined reference to 'pdf_droppage'

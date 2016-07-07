@@ -1,16 +1,14 @@
 package org.ebookdroid.ui.library;
 
+import org.ebookdroid.EBookDroidApp;
 import org.ebookdroid.R;
-import org.ebookdroid.common.settings.LibSettings;
 import org.ebookdroid.common.settings.books.BookSettings;
 import org.ebookdroid.common.settings.books.Bookmark;
 import org.ebookdroid.core.PageIndex;
 import org.ebookdroid.ui.library.adapters.BookNode;
 import org.ebookdroid.ui.library.adapters.BookShelfAdapter;
-import org.ebookdroid.ui.library.adapters.BooksAdapter;
 import org.ebookdroid.ui.library.adapters.LibraryAdapter;
 import org.ebookdroid.ui.library.adapters.RecentAdapter;
-import org.ebookdroid.ui.library.views.BookcaseView;
 import org.ebookdroid.ui.library.views.LibraryView;
 import org.ebookdroid.ui.library.views.RecentBooksView;
 
@@ -18,7 +16,6 @@ import android.os.Bundle;
 import android.view.ContextMenu;
 import android.view.ContextMenu.ContextMenuInfo;
 import android.view.KeyEvent;
-import android.view.LayoutInflater;
 import android.view.Menu;
 import android.view.MenuInflater;
 import android.view.MenuItem;
@@ -32,23 +29,32 @@ import android.widget.ExpandableListView.ExpandableListContextMenuInfo;
 import android.widget.ImageView;
 import android.widget.ViewFlipper;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
+import java.util.concurrent.atomic.AtomicLong;
 
-import org.emdev.BaseDroidApp;
 import org.emdev.common.android.AndroidVersion;
-import org.emdev.common.filesystem.MediaManager;
+import org.emdev.common.log.LogContext;
+import org.emdev.common.log.LogManager;
 import org.emdev.ui.AbstractActionActivity;
-import org.emdev.ui.actions.ActionMenuHelper;
+import org.emdev.ui.actions.ActionMethodDef;
+import org.emdev.ui.actions.ActionTarget;
 import org.emdev.ui.uimanager.IUIManager;
-import org.emdev.utils.FileUtils;
 import org.emdev.utils.LengthUtils;
 
+@ActionTarget(
+// actions
+actions = {
+// start
+@ActionMethodDef(id = R.id.mainmenu_about, method = "showAbout")
+// finish
+})
 public class RecentActivity extends AbstractActionActivity<RecentActivity, RecentActivityController> {
+
+    public final LogContext LCTX;
+
+    private static final AtomicLong SEQ = new AtomicLong();
 
     public static final int VIEW_RECENT = 0;
     public static final int VIEW_LIBRARY = 1;
@@ -56,56 +62,88 @@ public class RecentActivity extends AbstractActionActivity<RecentActivity, Recen
     private ViewFlipper viewflipper;
 
     ImageView libraryButton;
-    BookcaseView bookcaseView;
     RecentBooksView recentBooksView;
     LibraryView libraryView;
 
     public RecentActivity() {
-        super(true, ON_CREATE, ON_RESUME);
+        super();
+        LCTX = LogManager.root().lctx(this.getClass().getSimpleName(), true).lctx("" + SEQ.getAndIncrement(), true);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.emdev.ui.AbstractActionActivity#createController()
-     */
     @Override
     protected RecentActivityController createController() {
         return new RecentActivityController(this);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.emdev.ui.AbstractActionActivity#onCreateImpl(android.os.Bundle)
-     */
     @Override
-    protected void onCreateImpl(final Bundle savedInstanceState) {
-        IUIManager.instance.setTitleVisible(this, !AndroidVersion.lessThan3x, true);
+    public void onCreate(final Bundle savedInstanceState) {
+        if (LCTX.isDebugEnabled()) {
+            LCTX.d("onCreate()");
+        }
+        super.onCreate(savedInstanceState);
+        if (!isTaskRoot()) {
+            // Workaround for Android 2.1-
+            if (LCTX.isDebugEnabled()) {
+                LCTX.d("onCreate(): close duplicated activity");
+            }
+            finish();
+            return;
+        }
+
+        IUIManager.instance.setTitleVisible(this, false, true);
 
         setContentView(R.layout.recent);
 
-        if (AndroidVersion.lessThan3x) {
-            // Old layout with custom title bar
-            libraryButton = (ImageView) findViewById(R.id.recent_showlibrary);
+        libraryButton = (ImageView) findViewById(R.id.recent_showlibrary);
+
+        final RecentActivityController c = restoreController();
+        if (c != null) {
+            c.onRestore(this);
+        } else {
+            getController().onCreate();
+        }
+
+        if (AndroidVersion.VERSION == 3) {
+            setActionForView(R.id.recent_showlibrary);
+            setActionForView(R.id.recent_showbrowser);
         }
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.emdev.ui.AbstractActionActivity#onResumeImpl()
-     */
     @Override
-    protected void onResumeImpl() {
+    protected void onResume() {
+        if (LCTX.isDebugEnabled()) {
+            LCTX.d("onResume()");
+        }
+        super.onResume();
         IUIManager.instance.invalidateOptionsMenu(this);
+        getController().onResume();
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see android.app.Activity#onCreateOptionsMenu(android.view.Menu)
-     */
+    @Override
+    protected void onPause() {
+        if (LCTX.isDebugEnabled()) {
+            LCTX.d("onPause(): " + isFinishing());
+        }
+        super.onPause();
+        getController().onPause();
+    }
+
+    @Override
+    protected void onDestroy() {
+        final boolean finishing = isFinishing();
+        if (LCTX.isDebugEnabled()) {
+            LCTX.d("onDestroy(): " + finishing);
+        }
+        super.onDestroy();
+        if (!isTaskRoot()) {
+            LCTX.d("onDestroy(): close duplicated activity");
+            return;
+        }
+        getController().onDestroy(finishing);
+
+        EBookDroidApp.onActivityClose(finishing);
+    }
+
     @Override
     public boolean onCreateOptionsMenu(final Menu menu) {
         final MenuInflater inflater = getMenuInflater();
@@ -113,68 +151,13 @@ public class RecentActivity extends AbstractActionActivity<RecentActivity, Recen
         return true;
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.emdev.ui.AbstractActionActivity#updateMenuItems(android.view.Menu)
-     */
     @Override
     protected void updateMenuItems(final Menu menu) {
-        final LibSettings ls = LibSettings.current();
-        if (!ls.useBookcase) {
-            final int viewMode = getViewMode();
-            final boolean showLibraryAvailable = viewMode == RecentActivity.VIEW_RECENT;
-            ActionMenuHelper.setMenuItemVisible(menu, showLibraryAvailable, R.id.recent_showlibrary);
-            ActionMenuHelper.setMenuItemVisible(menu, !showLibraryAvailable, R.id.recent_showrecent);
-        } else {
-            ActionMenuHelper.setMenuItemVisible(menu, false, R.id.recent_showlibrary);
-            ActionMenuHelper.setMenuItemVisible(menu, false, R.id.recent_showrecent);
-        }
-
-        ActionMenuHelper.setMenuItemExtra(menu, R.id.recent_storage_all, "path", "/");
-        ActionMenuHelper.setMenuItemExtra(menu, R.id.recent_storage_external, "path", BaseDroidApp.EXT_STORAGE.getAbsolutePath());
-
-        final MenuItem storageMenu = menu.findItem(R.id.recent_storage_menu);
-        if (storageMenu != null) {
-            final SubMenu subMenu = storageMenu.getSubMenu();
-            subMenu.removeGroup(R.id.actions_storageGroup);
-
-            final Set<String> added = new HashSet<String>();
-            added.add("/");
-            added.add(FileUtils.getCanonicalPath(BaseDroidApp.EXT_STORAGE));
-
-            if (ls.showScanningInMenu) {
-                for (final String path : ls.autoScanDirs) {
-                    final File file = new File(path);
-                    final String mp = FileUtils.getCanonicalPath(file);
-                    if (mp != null && added.add(mp)) {
-                        addStorageMenuItem(subMenu, R.drawable.recent_menu_storage_scanned, file.getPath(), path);
-                    }
-                }
-            }
-            if (ls.showRemovableMediaInMenu) {
-                for (final String path : MediaManager.getReadableMedia()) {
-                    final File file = new File(path);
-                    final String mp = FileUtils.getCanonicalPath(file);
-                    if (mp != null && added.add(mp)) {
-                        addStorageMenuItem(subMenu, R.drawable.recent_menu_storage_external, file.getName(), path);
-                    }
-                }
-            }
-        }
+        final int viewMode = getViewMode();
+        final boolean showLibraryAvailable = viewMode == RecentActivity.VIEW_RECENT;
+        setMenuItemVisible(menu, showLibraryAvailable, R.id.recent_showlibrary);
     }
 
-    protected void addStorageMenuItem(final Menu menu, final int resId, final String name, final String path) {
-        final MenuItem bmi = menu.add(R.id.actions_storageGroup, R.id.actions_storage, Menu.NONE, name);
-        bmi.setIcon(resId);
-        ActionMenuHelper.setMenuItemExtra(bmi, "path", path);
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * @see android.app.Activity#onCreateContextMenu(android.view.ContextMenu, android.view.View, android.view.ContextMenu.ContextMenuInfo)
-     */
     @Override
     public void onCreateContextMenu(final ContextMenu menu, final View v, final ContextMenuInfo menuInfo) {
         final Object source = getContextMenuSource(v, menuInfo);
@@ -185,7 +168,7 @@ public class RecentActivity extends AbstractActionActivity<RecentActivity, Recen
             onCreateShelfMenu(menu, (BookShelfAdapter) source);
         }
 
-        ActionMenuHelper.setMenuSource(getController(), menu, source);
+        setMenuSource(menu, source);
     }
 
     protected Object getContextMenuSource(final View v, final ContextMenuInfo menuInfo) {
@@ -218,12 +201,6 @@ public class RecentActivity extends AbstractActionActivity<RecentActivity, Recen
         menu.setHeaderTitle(node.path);
         menu.findItem(R.id.bookmenu_recentgroup).setVisible(bs != null);
 
-        final BookShelfAdapter bookShelf = getController().getBookShelf(node);
-        final BookShelfAdapter current = bookcaseView != null ? getController().getBookShelf(
-                bookcaseView.getCurrentList()) : null;
-        menu.findItem(R.id.bookmenu_openbookshelf).setVisible(
-                bookShelf != null && current != null && bookShelf != current);
-
         final MenuItem om = menu.findItem(R.id.bookmenu_open);
         final SubMenu osm = om != null ? om.getSubMenu() : null;
         if (osm == null) {
@@ -250,7 +227,7 @@ public class RecentActivity extends AbstractActionActivity<RecentActivity, Recen
     protected void addBookmarkMenuItem(final Menu menu, final Bookmark b) {
         final MenuItem bmi = menu.add(R.id.actions_goToBookmarkGroup, R.id.actions_goToBookmark, Menu.NONE, b.name);
         bmi.setIcon(R.drawable.viewer_menu_bookmark);
-        ActionMenuHelper.setMenuItemExtra(bmi, "bookmark", b);
+        setMenuItemExtra(bmi, "bookmark", b);
     }
 
     protected void onCreateShelfMenu(final ContextMenu menu, final BookShelfAdapter a) {
@@ -259,11 +236,6 @@ public class RecentActivity extends AbstractActionActivity<RecentActivity, Recen
         menu.setHeaderTitle(a.name);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see android.app.Activity#onKeyDown(int, android.view.KeyEvent)
-     */
     @Override
     public boolean onKeyDown(final int keyCode, final KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_BACK && event.getRepeatCount() == 0) {
@@ -293,39 +265,7 @@ public class RecentActivity extends AbstractActionActivity<RecentActivity, Recen
         return vf != null ? vf.getDisplayedChild() : VIEW_RECENT;
     }
 
-    void showBookshelf(final int shelfIndex) {
-        if (bookcaseView != null) {
-            bookcaseView.setCurrentList(shelfIndex);
-        }
-    }
-
-    void showNextBookshelf() {
-        if (bookcaseView != null) {
-            bookcaseView.nextList();
-        }
-    }
-
-    void showPrevBookshelf() {
-        if (bookcaseView != null) {
-            bookcaseView.prevList();
-        }
-    }
-
-    void showBookcase(final BooksAdapter bookshelfAdapter, final RecentAdapter recentAdapter) {
-        final ViewFlipper vf = getViewflipper();
-        vf.removeAllViews();
-        if (bookcaseView == null) {
-            bookcaseView = (BookcaseView) LayoutInflater.from(this).inflate(R.layout.bookcase_view, vf, false);
-            bookcaseView.init(bookshelfAdapter, recentAdapter);
-        }
-        vf.addView(bookcaseView, 0);
-
-        if (libraryButton != null) {
-            libraryButton.setImageResource(R.drawable.recent_actionbar_library);
-        }
-    }
-
-    void showLibrary(final LibraryAdapter libraryAdapter, final RecentAdapter recentAdapter) {
+    void showLibrary(final LibraryAdapter libraryAdapter, final RecentAdapter recentAdapter, final int view) {
         if (recentBooksView == null) {
             recentBooksView = new RecentBooksView(getController(), recentAdapter);
             registerForContextMenu(recentBooksView);
@@ -340,13 +280,7 @@ public class RecentActivity extends AbstractActionActivity<RecentActivity, Recen
         vf.addView(recentBooksView, VIEW_RECENT);
         vf.addView(libraryView, VIEW_LIBRARY);
 
-        if (libraryButton != null) {
-            libraryButton.setImageResource(R.drawable.recent_actionbar_library);
-        }
-
-        if (recentAdapter.getCount() == 0) {
-            changeLibraryView(VIEW_LIBRARY);
-        }
+        changeLibraryView(view);
     }
 
     ViewFlipper getViewflipper() {

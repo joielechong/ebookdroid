@@ -6,11 +6,13 @@ import org.ebookdroid.common.settings.definitions.BookPreferences;
 import org.ebookdroid.common.settings.listeners.IAppSettingsChangeListener;
 import org.ebookdroid.common.settings.types.BookRotationType;
 import org.ebookdroid.common.settings.types.DocumentViewMode;
+import org.ebookdroid.common.settings.types.DocumentViewType;
 import org.ebookdroid.common.settings.types.FontSize;
 import org.ebookdroid.common.settings.types.PageAlign;
 import org.ebookdroid.common.settings.types.RotationType;
 import org.ebookdroid.common.settings.types.ToastPosition;
 import org.ebookdroid.core.curl.PageAnimationType;
+import org.ebookdroid.droids.fb2.codec.parsers.FB2Parsers;
 
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.Editor;
@@ -18,7 +20,6 @@ import android.content.SharedPreferences.Editor;
 import org.emdev.common.backup.BackupManager;
 import org.emdev.common.backup.IBackupAgent;
 import org.emdev.common.settings.backup.SettingsBackupHelper;
-import org.emdev.common.xml.XmlParsers;
 import org.emdev.utils.CompareUtils;
 import org.json.JSONObject;
 
@@ -56,22 +57,6 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
 
     public final boolean showAnimIcon;
 
-    /* =============== Tap & Scroll settings =============== */
-
-    public final boolean tapsEnabled;
-
-    public final int scrollHeight;
-
-    public final boolean animateScrolling;
-
-    /* =============== Tap & Keyboard settings =============== */
-
-    public final String tapProfiles;
-
-    public final String keysBinding;
-
-    /* =============== Navigation & History settings =============== */
-
     public final boolean showBookmarksInMenu;
 
     public final int linkHighlightColor;
@@ -88,9 +73,27 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
 
     public final boolean storeSearchGotoHistory;
 
+    /* =============== Tap & Scroll settings =============== */
+
+    public final boolean tapsEnabled;
+
+    public final int scrollHeight;
+
+    public final int touchProcessingDelay;
+
+    public final boolean animateScrolling;
+
+    /* =============== Tap & Keyboard settings =============== */
+
+    public final String tapProfiles;
+
+    public final String keysBinding;
+
     /* =============== Performance settings =============== */
 
     public final int pagesInMemory;
+
+    public final DocumentViewType viewType;
 
     public final int decodingThreads;
 
@@ -98,9 +101,19 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
 
     public final int drawThreadPriority;
 
-    public final boolean decodingOnScroll;
-
     public final int bitmapSize;
+
+    public final boolean bitmapFileringEnabled;
+
+    public final boolean textureReuseEnabled;
+
+    public final boolean useNativeTextures;
+
+    public final boolean useBitmapHack;
+
+    public final boolean useEarlyRecycling;
+
+    public final boolean reloadDuringZoom;
 
     public final int heapPreallocate;
 
@@ -113,8 +126,6 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
     public boolean positiveImagesInNightMode;
 
     final int contrast;
-
-    final int gamma;
 
     final int exposure;
 
@@ -158,7 +169,7 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
 
     /* =============== FB2 Format-specific settings =============== */
 
-    public final XmlParsers fb2XmlParser;
+    public final FB2Parsers fb2XmlParser;
 
     public final String fb2FontPack;
 
@@ -190,6 +201,7 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
         /* =============== Tap & Scroll settings =============== */
         tapsEnabled = TAPS_ENABLED.getPreferenceValue(prefs);
         scrollHeight = SCROLL_HEIGHT.getPreferenceValue(prefs);
+        touchProcessingDelay = TOUCH_DELAY.getPreferenceValue(prefs);
         animateScrolling = ANIMATE_SCROLLING.getPreferenceValue(prefs);
         /* =============== Navigation & History settings =============== */
         showBookmarksInMenu = SHOW_BOOKMARKs_MENU.getPreferenceValue(prefs);
@@ -205,18 +217,23 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
         keysBinding = KEY_BINDINGS.getPreferenceValue(prefs);
         /* =============== Performance settings =============== */
         pagesInMemory = PAGES_IN_MEMORY.getPreferenceValue(prefs);
+        viewType = VIEW_TYPE.getPreferenceValue(prefs);
         decodingThreads = DECODING_THREADS.getPreferenceValue(prefs);
         decodingThreadPriority = DECODE_THREAD_PRIORITY.getPreferenceValue(prefs);
         drawThreadPriority = DRAW_THREAD_PRIORITY.getPreferenceValue(prefs);
-        decodingOnScroll = DECODING_ON_SCROLL.getPreferenceValue(prefs);
         bitmapSize = BITMAP_SIZE.getPreferenceValue(prefs);
+        bitmapFileringEnabled = BITMAP_FILTERING.getPreferenceValue(prefs);
+        textureReuseEnabled = REUSE_TEXTURES.getPreferenceValue(prefs);
+        useNativeTextures = USE_NATIVE_TEXTURES.getPreferenceValue(prefs);
+        useBitmapHack = USE_BITMAP_HACK.getPreferenceValue(prefs);
+        useEarlyRecycling = EARLY_RECYCLING.getPreferenceValue(prefs);
+        reloadDuringZoom = RELOAD_DURING_ZOOM.getPreferenceValue(prefs);
         heapPreallocate = HEAP_PREALLOCATE.getPreferenceValue(prefs);
         pdfStorageSize = PDF_STORAGE_SIZE.getPreferenceValue(prefs);
         /* =============== Default rendering settings =============== */
         nightMode = NIGHT_MODE.getPreferenceValue(prefs);
         positiveImagesInNightMode = NIGHT_MODE_POS_IMAGES.getPreferenceValue(prefs);
         contrast = CONTRAST.getPreferenceValue(prefs);
-        gamma = GAMMA.getPreferenceValue(prefs);
         exposure = EXPOSURE.getPreferenceValue(prefs);
         autoLevels = AUTO_LEVELS.getPreferenceValue(prefs);
         splitPages = SPLIT_PAGES.getPreferenceValue(prefs);
@@ -328,7 +345,6 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
         bs.nightMode = current.nightMode;
         bs.positiveImagesInNightMode = current.positiveImagesInNightMode;
         bs.contrast = current.contrast;
-        bs.gamma = current.gamma;
         bs.exposure = current.exposure;
         bs.autoLevels = current.autoLevels;
         bs.splitPages = current.splitPages;
@@ -344,7 +360,6 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
         bs.nightMode = BOOK_NIGHT_MODE.getPreferenceValue(prefs, current.nightMode);
         bs.positiveImagesInNightMode = BOOK_NIGHT_MODE_POS_IMAGES.getPreferenceValue(prefs, current.positiveImagesInNightMode);
         bs.contrast = BOOK_CONTRAST.getPreferenceValue(prefs, current.contrast);
-        bs.gamma = BOOK_GAMMA.getPreferenceValue(prefs, current.gamma);
         bs.exposure = BOOK_EXPOSURE.getPreferenceValue(prefs, current.exposure);
         bs.autoLevels = BOOK_AUTO_LEVELS.getPreferenceValue(prefs, current.autoLevels);
         bs.splitPages = BOOK_SPLIT_PAGES.getPreferenceValue(prefs, current.splitPages);
@@ -364,7 +379,6 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
         edit.remove(BOOK_NIGHT_MODE.key);
         edit.remove(BOOK_NIGHT_MODE_POS_IMAGES.key);
         edit.remove(BOOK_CONTRAST.key);
-        edit.remove(BOOK_GAMMA.key);
         edit.remove(BOOK_EXPOSURE.key);
         edit.remove(BOOK_AUTO_LEVELS.key);
         edit.remove(BOOK_SPLIT_PAGES.key);
@@ -385,7 +399,6 @@ public class AppSettings implements AppPreferences, BookPreferences, IBackupAgen
         BOOK_NIGHT_MODE.setPreferenceValue(edit, bs.nightMode);
         BOOK_NIGHT_MODE_POS_IMAGES.setPreferenceValue(edit, bs.positiveImagesInNightMode);
         BOOK_CONTRAST.setPreferenceValue(edit, bs.contrast);
-        BOOK_GAMMA.setPreferenceValue(edit, bs.gamma);
         BOOK_EXPOSURE.setPreferenceValue(edit, bs.exposure);
         BOOK_AUTO_LEVELS.setPreferenceValue(edit, bs.autoLevels);
         BOOK_SPLIT_PAGES.setPreferenceValue(edit, bs.splitPages);

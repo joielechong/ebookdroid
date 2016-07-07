@@ -22,10 +22,20 @@ import org.emdev.ui.actions.ActionController;
 import org.emdev.ui.actions.ActionDialogBuilder;
 import org.emdev.ui.actions.ActionEx;
 import org.emdev.ui.actions.ActionMethod;
+import org.emdev.ui.actions.ActionMethodDef;
+import org.emdev.ui.actions.ActionTarget;
 import org.emdev.ui.actions.IActionController;
 import org.emdev.ui.actions.params.AbstractActionParameter;
 import org.emdev.utils.LayoutUtils;
 
+@ActionTarget(
+// action list
+actions = {
+        // actions
+        @ActionMethodDef(id = R.id.browserhome, method = "goHome"),
+        @ActionMethodDef(id = R.id.browserupfolder, method = "goUp")
+// no more
+})
 public class FolderDlg implements AdapterView.OnItemClickListener {
 
     public static final String SELECTED_FOLDER = "selected";
@@ -72,36 +82,6 @@ public class FolderDlg implements AdapterView.OnItemClickListener {
         builder.setView(view);
         builder.setPositiveButton(android.R.string.ok, okActionId, new SelectedFolder());
         builder.setNegativeButton();
-
-        goHome(null);
-
-        AlertDialog dlg = builder.show();
-        LayoutUtils.maximizeWindow(dlg.getWindow());
-    }
-
-    public void show(final File file, int titleId, final int okActionId, final int cancelActionId) {
-        final View view = LayoutInflater.from(context).inflate(R.layout.folder_dialog, null);
-
-        adapter = new BrowserAdapter(filter);
-
-        header = (TextView) view.findViewById(R.id.browsertext);
-        filesView = (ListView) view.findViewById(R.id.browserview);
-        upButton = (ImageView) view.findViewById(R.id.browserupfolder);
-        homeButton = (ImageView) view.findViewById(R.id.browserhome);
-
-        upButton.setOnClickListener(controller.getOrCreateAction(R.id.browserupfolder));
-        homeButton.setOnClickListener(controller.getOrCreateAction(R.id.browserhome));
-
-        filesView.setAdapter(adapter);
-        filesView.setDrawingCacheQuality(View.DRAWING_CACHE_QUALITY_LOW);
-        filesView.setOnItemClickListener(this);
-
-        final ActionDialogBuilder builder = new ActionDialogBuilder(context, controller);
-
-        builder.setTitle(titleId);
-        builder.setView(view);
-        builder.setPositiveButton(android.R.string.ok, okActionId, new SelectedFolder());
-        builder.setNegativeButton(android.R.string.cancel, cancelActionId);
 
         goHome(null);
 

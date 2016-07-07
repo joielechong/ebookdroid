@@ -1,11 +1,8 @@
 package org.ebookdroid.core;
 
 import org.ebookdroid.common.bitmaps.BitmapManager;
-import org.ebookdroid.common.bitmaps.ByteBufferBitmap;
-import org.ebookdroid.common.bitmaps.ByteBufferManager;
 import org.ebookdroid.common.bitmaps.IBitmapRef;
 import org.ebookdroid.common.settings.AppSettings;
-import org.ebookdroid.common.settings.books.BookSettings;
 import org.ebookdroid.core.codec.CodecContext;
 import org.ebookdroid.core.codec.CodecDocument;
 import org.ebookdroid.core.codec.CodecFeatures;
@@ -17,6 +14,8 @@ import org.ebookdroid.core.crop.PageCropper;
 import org.ebookdroid.ui.viewer.IViewController.InvalidateSizeReason;
 
 import android.graphics.Bitmap;
+import android.graphics.Bitmap.Config;
+import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.graphics.RectF;
 
@@ -46,33 +45,77 @@ public class DecodeServiceBase implements DecodeService {
 
     final CodecContext codecContext;
 
-    final AtomicBoolean isRecycled;
+    final Executor executor = new Executor();
 
-    final AtomicReference<ViewState> viewState;
+    final AtomicBoolean isRecycled = new AtomicBoolean();
 
-    final Map<Integer, CodecPageHolder> pages;
-
-    final Executor executor;
+    final AtomicReference<ViewState> viewState = new AtomicReference<ViewState>();
 
     CodecDocument document;
 
+    final Map<Integer, CodecPageHolder> pages = new LinkedHashMap<Integer, CodecPageHolder>() {
+
+        private static final long serialVersionUID = -8845124816503128098L;
+
+        @Override
+        protected boolean removeEldestEntry(final Map.Entry<Integer, CodecPageHolder> eldest) {
+            if (this.size() > getCacheSize()) {
+                final CodecPageHolder value = eldest != null ? eldest.getValue() : null;
+                if (value != null) {
+                    if (value.isInvalid(-1)) {
+                        if (LCTX.isDebugEnabled()) {
+                            LCTX.d(Thread.currentThread().getName() + ": Remove auto-recycled codec page reference: "
+                                    + eldest.getKey());
+                        }
+                        return true;
+                    } else {
+                        final boolean recycled = value.recycle(-1, false);
+                        if (LCTX.isDebugEnabled()) {
+                            if (recycled) {
+                                LCTX.d(Thread.currentThread().getName() + ": Recycle and remove old codec page: "
+                                        + eldest.getKey());
+                            } else {
+                                LCTX.d(Thread.currentThread().getName()
+                                        + ": Codec page locked and cannot be recycled: " + eldest.getKey());
+                            }
+                        }
+                        return recycled;
+                    }
+                }
+            }
+            return false;
+        }
+    };
+
     public DecodeServiceBase(final CodecContext codecContext) {
         this.codecContext = codecContext;
-
-        isRecycled = new AtomicBoolean();
-
-        viewState = new AtomicReference<ViewState>();
-
-        pages = new PageCache();
-
-        executor = new Executor();
-
-        executor.start();
     }
 
     @Override
     public boolean isFeatureSupported(final int feature) {
         return codecContext.isFeatureSupported(feature);
+    }
+
+    @Override
+    public int getPixelFormat() {
+        final Config cfg = getBitmapConfig();
+        switch (cfg) {
+            case ALPHA_8:
+                return PixelFormat.A_8;
+            case ARGB_4444:
+                return PixelFormat.RGBA_4444;
+            case RGB_565:
+                return PixelFormat.RGB_565;
+            case ARGB_8888:
+                return PixelFormat.RGBA_8888;
+            default:
+                return PixelFormat.RGB_565;
+        }
+    }
+
+    @Override
+    public Config getBitmapConfig() {
+        return this.codecContext.getBitmapConfig();
     }
 
     @Override
@@ -162,7 +205,7 @@ public class DecodeServiceBase implements DecodeService {
             }
 
             // Checks if cropping setting is set and node crop region is not set
-            if (codecContext.isFeatureSupported(CodecFeatures.FEATURE_CROP_SUPPORT) && task.node.page.shouldCrop() && task.node.getCropping() == null) {
+            if (task.node.page.shouldCrop() && task.node.getCropping() == null) {
                 if (LCTX.isDebugEnabled()) {
                     LCTX.d(Thread.currentThread().getName() + ": Task " + task.id
                             + ": no cropping bounds for task node");
@@ -185,17 +228,16 @@ public class DecodeServiceBase implements DecodeService {
                 LCTX.d(Thread.currentThread().getName() + ": Task " + task.id + ": Rendering rect: " + r);
             }
 
-            final RectF cropping = task.node.page.getCropping(task.node);
+            RectF cropping = task.node.page.getCropping(task.node);
             final RectF actualSliceBounds = cropping != null ? cropping : task.node.pageSliceBounds;
-            final ByteBufferBitmap bitmap = vuPage.renderBitmap(task.viewState, r.width(), r.height(),
-                    actualSliceBounds);
+            final IBitmapRef bitmap = vuPage.renderBitmap(task.viewState, r.width(), r.height(), actualSliceBounds);
 
             if (executor.isTaskDead(task)) {
                 if (LCTX.isDebugEnabled()) {
                     LCTX.d(Thread.currentThread().getName() + ": Task " + task.id + ": Abort dead decode task for "
                             + task.node);
                 }
-                ByteBufferManager.release(bitmap);
+                BitmapManager.release(bitmap);
                 return;
             }
 
@@ -222,7 +264,6 @@ public class DecodeServiceBase implements DecodeService {
             }
 
             BitmapManager.clear("DecodeService OutOfMemoryError: ");
-            ByteBufferManager.clear("DecodeService OutOfMemoryError: ");
 
             abortDecoding(task, null, null);
         } catch (final Throwable th) {
@@ -262,23 +303,18 @@ public class DecodeServiceBase implements DecodeService {
     }
 
     protected RectF calculateRootCropping(final DecodeTask task, final PageTreeNode root, final CodecPage vuPage) {
+        final Rect rootRect = new Rect(0, 0, PageCropper.BMP_SIZE, PageCropper.BMP_SIZE);
         final RectF rootBounds = root.pageSliceBounds;
-        final ByteBufferBitmap rootBitmap = vuPage.renderBitmap(task.viewState, PageCropper.BMP_SIZE,
-                PageCropper.BMP_SIZE, rootBounds);
 
-        final BookSettings bs = task.viewState.book;
-        if (bs != null) {
-            rootBitmap.applyEffects(bs);
-        }
-
-        root.setAutoCropping(PageCropper.getCropBounds(rootBitmap, root.pageSliceBounds), true);
+        final IBitmapRef rootBitmap = vuPage.renderBitmap(task.viewState, rootRect.width(), rootRect.height(), rootBounds);
+        root.setAutoCropping(PageCropper.getCropBounds(rootBitmap, rootRect, root.pageSliceBounds), true);
 
         if (LCTX.isDebugEnabled()) {
             LCTX.d(Thread.currentThread().getName() + ": Task " + task.id + ": cropping root bounds: "
                     + root.getCropping());
         }
 
-        ByteBufferManager.release(rootBitmap);
+        BitmapManager.release(rootBitmap);
 
         final ViewState viewState = task.viewState;
         final PageIndex currentPage = viewState.book.getCurrentPage();
@@ -287,7 +323,7 @@ public class DecodeServiceBase implements DecodeService {
 
         viewState.ctrl.invalidatePageSizes(InvalidateSizeReason.PAGE_LOADED, task.node.page);
 
-        final RectF croppedPageBounds = root.page.getBounds(task.viewState.zoom);
+        RectF croppedPageBounds = root.page.getBounds(task.viewState.zoom);
 
         if (LCTX.isDebugEnabled()) {
             LCTX.d(Thread.currentThread().getName() + ": Task " + task.id + ": cropping page bounds: "
@@ -311,13 +347,13 @@ public class DecodeServiceBase implements DecodeService {
         return new Rect(0, 0, (int) r.width(), (int) r.height());
     }
 
-    void finishDecoding(final DecodeTask currentDecodeTask, final CodecPage page, final ByteBufferBitmap bitmap,
+    void finishDecoding(final DecodeTask currentDecodeTask, final CodecPage page, final IBitmapRef bitmap,
             final Rect bitmapBounds, final RectF croppedPageBounds) {
         stopDecoding(currentDecodeTask.node, "complete");
         updateImage(currentDecodeTask, page, bitmap, bitmapBounds, croppedPageBounds);
     }
 
-    void abortDecoding(final DecodeTask currentDecodeTask, final CodecPage page, final ByteBufferBitmap bitmap) {
+    void abortDecoding(final DecodeTask currentDecodeTask, final CodecPage page, final IBitmapRef bitmap) {
         stopDecoding(currentDecodeTask.node, "failed");
         updateImage(currentDecodeTask, page, bitmap, null, null);
     }
@@ -356,9 +392,9 @@ public class DecodeServiceBase implements DecodeService {
         return holder;
     }
 
-    void updateImage(final DecodeTask currentDecodeTask, final CodecPage page, final ByteBufferBitmap bitmap,
+    void updateImage(final DecodeTask currentDecodeTask, final CodecPage page, final IBitmapRef bitmap,
             final Rect bitmapBounds, final RectF croppedPageBounds) {
-        currentDecodeTask.node.decodeComplete(page, bitmap, croppedPageBounds);
+        currentDecodeTask.node.decodeComplete(page, bitmap, bitmapBounds, croppedPageBounds);
     }
 
     @Override
@@ -388,40 +424,6 @@ public class DecodeServiceBase implements DecodeService {
         return pagesInMemory == 0 ? 0 : Math.max(minSize, pagesInMemory);
     }
 
-    class PageCache extends LinkedHashMap<Integer, CodecPageHolder> {
-
-        private static final long serialVersionUID = -8845124816503128098L;
-
-        @Override
-        protected boolean removeEldestEntry(final Map.Entry<Integer, CodecPageHolder> eldest) {
-            if (this.size() > getCacheSize()) {
-                final CodecPageHolder value = eldest != null ? eldest.getValue() : null;
-                if (value != null) {
-                    if (value.isInvalid(-1)) {
-                        if (LCTX.isDebugEnabled()) {
-                            LCTX.d(Thread.currentThread().getName() + ": Remove auto-recycled codec page reference: "
-                                    + eldest.getKey());
-                        }
-                        return true;
-                    } else {
-                        final boolean recycled = value.recycle(-1, false);
-                        if (LCTX.isDebugEnabled()) {
-                            if (recycled) {
-                                LCTX.d(Thread.currentThread().getName() + ": Recycle and remove old codec page: "
-                                        + eldest.getKey());
-                            } else {
-                                LCTX.d(Thread.currentThread().getName()
-                                        + ": Codec page locked and cannot be recycled: " + eldest.getKey());
-                            }
-                        }
-                        return recycled;
-                    }
-                }
-            }
-            return false;
-        }
-    }
-
     class Executor implements Runnable {
 
         final Map<PageTreeNode, DecodeTask> decodingTasks = new IdentityHashMap<PageTreeNode, DecodeTask>();
@@ -434,19 +436,13 @@ public class DecodeServiceBase implements DecodeService {
         Executor() {
             tasks = new ArrayList<Task>();
             threads = new Thread[AppSettings.current().decodingThreads];
-
             LCTX.i("Number of decoding threads: " + threads.length);
 
-            for (int i = 0; i < threads.length; i++) {
-                threads[i] = new Thread(this, "DecodingThread-" + i);
-            }
-        }
-
-        void start() {
             final int decodingThreadPriority = AppSettings.current().decodingThreadPriority;
             LCTX.i("Decoding thread priority: " + decodingThreadPriority);
 
             for (int i = 0; i < threads.length; i++) {
+                threads[i] = new Thread(this, "DecodingThread-" + i);
                 threads[i].setPriority(decodingThreadPriority);
                 threads[i].start();
             }
@@ -459,7 +455,6 @@ public class DecodeServiceBase implements DecodeService {
                     final Runnable r = nextTask();
                     if (r != null) {
                         BitmapManager.release();
-                        ByteBufferManager.release();
                         r.run();
                     }
                 }
@@ -473,77 +468,52 @@ public class DecodeServiceBase implements DecodeService {
         }
 
         Runnable nextTask() {
-            final ViewState vs = viewState != null ? viewState.get() : null;
-            if (vs == null || vs.app == null || vs.app.decodingOnScroll || vs.ctrl.getView().isScrollFinished()) {
-                lock.lock();
-                try {
-                    if (!tasks.isEmpty()) {
-                        return selectBestTask();
+            lock.lock();
+            try {
+                if (!tasks.isEmpty()) {
+                    final TaskComparator comp = new TaskComparator(viewState.get());
+                    Task candidate = null;
+                    int cindex = 0;
+
+                    int index = 0;
+                    while (index < tasks.size() && candidate == null) {
+                        candidate = tasks.get(index);
+                        cindex = index;
+                        index++;
                     }
-                } finally {
-                    lock.unlock();
+                    if (candidate == null) {
+                        if (LCTX.isDebugEnabled()) {
+                            LCTX.d(Thread.currentThread().getName() + ": No tasks in queue");
+                        }
+                        tasks.clear();
+                    } else {
+                        while (index < tasks.size()) {
+                            final Task next = tasks.get(index);
+                            if (next != null && comp.compare(next, candidate) < 0) {
+                                candidate = next;
+                                cindex = index;
+                            }
+                            index++;
+                        }
+                        if (LCTX.isDebugEnabled()) {
+                            LCTX.d(Thread.currentThread().getName() + ": <<<: " + cindex + "/" + tasks.size() + ": "
+                                    + candidate);
+                        }
+                        tasks.set(cindex, null);
+                    }
+                    return candidate;
                 }
-            } else {
-                if (LCTX.isDebugEnabled()) {
-                    LCTX.d(Thread.currentThread().getName() + ": view in scrolling");
-                }
+            } finally {
+                lock.unlock();
             }
             synchronized (run) {
                 try {
-                    run.wait(500);
+                    run.wait(60000);
                 } catch (final InterruptedException ex) {
                     Thread.interrupted();
                 }
             }
             return null;
-        }
-
-        private Runnable selectBestTask() {
-            final TaskComparator comp = new TaskComparator(viewState.get());
-            Task candidate = null;
-            int cindex = 0;
-
-            int index = 0;
-            while (index < tasks.size() && candidate == null) {
-                candidate = tasks.get(index);
-                if (candidate != null && candidate.cancelled.get()) {
-                    if (LCTX.isDebugEnabled()) {
-                        LCTX.d("---: " + index + "/" + tasks.size() + " " + candidate);
-                    }
-                    tasks.set(index, null);
-                    candidate = null;
-                }
-                cindex = index;
-                index++;
-            }
-            if (candidate == null) {
-                if (LCTX.isDebugEnabled()) {
-                    LCTX.d(Thread.currentThread().getName() + ": No tasks in queue");
-                }
-                tasks.clear();
-            } else {
-                while (index < tasks.size()) {
-                    final Task next = tasks.get(index);
-                    if (next != null) {
-                        if (next.cancelled.get()) {
-                            if (LCTX.isDebugEnabled()) {
-                                LCTX.d("---: " + index + "/" + tasks.size() + " " + next);
-                            }
-                            tasks.set(index, null);
-                        } else if (comp.compare(next, candidate) < 0) {
-                            candidate = next;
-                            cindex = index;
-                        }
-                    }
-                    index++;
-                }
-                if (LCTX.isDebugEnabled()) {
-                    LCTX.d(Thread.currentThread().getName() + ": <<<: " + cindex + "/" + tasks.size() + ": "
-                            + candidate);
-                }
-                tasks.set(cindex, null);
-            }
-            return candidate;
         }
 
         public void add(final SearchTask task) {
@@ -660,6 +630,15 @@ public class DecodeServiceBase implements DecodeService {
 
                 if (removed != null) {
                     removed.cancelled.set(true);
+                    for (int i = 0; i < tasks.size(); i++) {
+                        if (removed == tasks.get(i)) {
+                            if (LCTX.isDebugEnabled()) {
+                                LCTX.d("---: " + i + "/" + tasks.size() + " " + removed);
+                            }
+                            tasks.set(i, null);
+                            break;
+                        }
+                    }
                     if (LCTX.isDebugEnabled()) {
                         LCTX.d(Thread.currentThread().getName() + ": Task " + removed.id
                                 + ": Stop decoding task with reason: " + reason + " for " + removed.node);
@@ -847,7 +826,7 @@ public class DecodeServiceBase implements DecodeService {
     }
 
     @Override
-    public IBitmapRef createThumbnail(final boolean useEmbeddedIfAvailable, int width, int height, final int pageNo,
+    public IBitmapRef createThumbnail(boolean useEmbeddedIfAvailable, int width, int height, final int pageNo,
             final RectF region) {
         if (document == null) {
             return null;
@@ -868,16 +847,7 @@ public class DecodeServiceBase implements DecodeService {
             return ref;
         } else {
             final CodecPage page = getPage(pageNo);
-            return page.renderBitmap(null, width, height, region).toBitmap();
+            return page.renderBitmap(null, width, height, region);
         }
-    }
-
-    @Override
-    public ByteBufferBitmap createPageThumbnail(final int width, final int height, final int pageNo, final RectF region) {
-        if (document == null) {
-            return null;
-        }
-        final CodecPage page = getPage(pageNo);
-        return page.renderBitmap(null, width, height, region);
     }
 }

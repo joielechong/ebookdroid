@@ -1,7 +1,6 @@
 package org.ebookdroid;
 
 import org.ebookdroid.common.bitmaps.BitmapManager;
-import org.ebookdroid.common.bitmaps.ByteBufferManager;
 import org.ebookdroid.common.cache.CacheManager;
 import org.ebookdroid.common.settings.AppSettings;
 import org.ebookdroid.common.settings.BackupSettings;
@@ -18,12 +17,11 @@ import android.util.Log;
 import android.webkit.WebView;
 
 import org.emdev.BaseDroidApp;
+import org.emdev.common.android.VMRuntimeHack;
 import org.emdev.common.backup.BackupManager;
-import org.emdev.common.filesystem.MediaManager;
 import org.emdev.common.fonts.FontManager;
 import org.emdev.ui.actions.ActionController;
 import org.emdev.ui.actions.ActionDialogBuilder;
-import org.emdev.ui.gl.GLConfiguration;
 import org.emdev.utils.concurrent.Flag;
 
 public class EBookDroidApp extends BaseDroidApp implements IAppSettingsChangeListener, IBackupSettingsChangeListener,
@@ -31,13 +29,11 @@ public class EBookDroidApp extends BaseDroidApp implements IAppSettingsChangeLis
 
     public static final Flag initialized = new Flag();
 
-    public static EBookDroidVersion version;
-
     private static EBookDroidApp instance;
 
     /**
      * {@inheritDoc}
-     *
+     * 
      * @see android.app.Application#onCreate()
      */
     @Override
@@ -45,52 +41,44 @@ public class EBookDroidApp extends BaseDroidApp implements IAppSettingsChangeLis
         super.onCreate();
 
         instance = this;
-        version = EBookDroidVersion.get(APP_VERSION_CODE);
 
         SettingsManager.init(this);
         CacheManager.init(this);
-        MediaManager.init(this);
+        FontManager.init();
 
-        initFonts();
-
-        preallocateHeap(AppSettings.current().heapPreallocate);
+        VMRuntimeHack.preallocateHeap(AppSettings.current().heapPreallocate);
 
         SettingsManager.addListener(this);
         onAppSettingsChanged(null, AppSettings.current(), null);
         onBackupSettingsChanged(null, BackupSettings.current(), null);
 
-        GLConfiguration.stencilRequired = !IS_EMULATOR;
-
         initialized.set();
-    }
-
-    public static void initFonts() {
-        FontManager.init(APP_STORAGE);
     }
 
     @Override
     public void onTerminate() {
         SettingsManager.onTerminate();
-        MediaManager.onTerminate(this);
     }
 
     /**
      * {@inheritDoc}
-     *
+     * 
      * @see android.app.Application#onLowMemory()
      */
     @Override
     public void onLowMemory() {
         super.onLowMemory();
         BitmapManager.clear("on Low Memory: ");
-        ByteBufferManager.clear("on Low Memory: ");
     }
 
     @Override
     public void onAppSettingsChanged(final AppSettings oldSettings, final AppSettings newSettings,
             final AppSettings.Diff diff) {
 
-        ByteBufferManager.setPartSize(1 << newSettings.bitmapSize);
+        BitmapManager.setPartSize(1 << newSettings.bitmapSize);
+        BitmapManager.setUseEarlyRecycling(newSettings.useEarlyRecycling);
+        BitmapManager.setUseBitmapHack(newSettings.useBitmapHack);
+        BitmapManager.setUseNativeTextures(newSettings.useNativeTextures);
 
         setAppLocale(newSettings.lang);
     }
@@ -112,19 +100,22 @@ public class EBookDroidApp extends BaseDroidApp implements IAppSettingsChangeLis
         if (!FontManager.external.hasInstalled()) {
             if (!SettingsManager.isInitialFlagsSet(SettingsManager.INITIAL_FONTS)) {
                 SettingsManager.setInitialFlags(SettingsManager.INITIAL_FONTS);
-
-                final ActionDialogBuilder b = new ActionDialogBuilder(context, new ActionController<Context>(context));
-                final WebView view = new WebView(context);
-
-                final String text = context.getResources().getString(R.string.font_reminder);
-                final String content = "<html><body>" + text + "</body></html>";
-
-                view.loadDataWithBaseURL("file:///fake/not_used", content, "text/html", "UTF-8", "");
-
-                b.setTitle(R.string.font_reminder_title);
-                b.setView(view);
-                b.setPositiveButton(android.R.string.ok, R.id.actions_no_action);
-                b.show();
+                
+                //FIXME:
+                if (false) {
+                    final ActionDialogBuilder b = new ActionDialogBuilder(context, new ActionController<Context>(context));
+                    final WebView view = new WebView(context);
+    
+                    final String text = context.getResources().getString(R.string.font_reminder);
+                    final String content = "<html><body>" + text + "</body></html>";
+    
+                    view.loadDataWithBaseURL("file:///fake/not_used", content, "text/html", "UTF-8", "");
+    
+                    b.setTitle(R.string.font_reminder_title);
+                    b.setView(view);
+                    b.setPositiveButton(android.R.string.ok, R.id.actions_no_action);
+                    b.show();
+                }
             }
         }
     }
@@ -138,36 +129,4 @@ public class EBookDroidApp extends BaseDroidApp implements IAppSettingsChangeLis
             System.exit(0);
         }
     }
-
-    /**
-     * Preallocate heap.
-     *
-     * @param size
-     *            the size in megabytes
-     * @return the object
-     */
-    private static Object preallocateHeap(final int size) {
-        if (size <= 0) {
-            Log.i(APP_NAME, "No heap preallocation");
-            return null;
-        }
-        int i = size;
-        Log.i(APP_NAME, "Trying to preallocate " + size + "Mb");
-        while (i > 0) {
-            try {
-                byte[] tmp = new byte[i * 1024 * 1024];
-                tmp[size - 1] = (byte) size;
-                Log.i(APP_NAME, "Preallocated " + i + "Mb");
-                tmp = null;
-                return tmp;
-            } catch (final OutOfMemoryError e) {
-                i--;
-            } catch (final IllegalArgumentException e) {
-                i--;
-            }
-        }
-        Log.i(APP_NAME, "Heap preallocation failed");
-        return null;
-    }
-
 }

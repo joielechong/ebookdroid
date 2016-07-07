@@ -73,8 +73,7 @@ public class OutlineAdapter extends BaseAdapter {
                 states[i] = OutlineItemState.LEAF;
             }
 
-            final Page page = model.getLinkTargetPage(this.objects[i].targetPage - 1, this.objects[i].targetRect, null,
-                    bs.splitRTL);
+            final Page page = model.getLinkTargetPage(this.objects[i].targetPage - 1, this.objects[i].targetRect, null, bs.splitRTL);
             this.pageIndexes[i] = page != null ? page.index.viewIndex + 1 : -1;
         }
 
@@ -93,12 +92,10 @@ public class OutlineAdapter extends BaseAdapter {
     }
 
     public int getParentId(final int id) {
-        if (0 <= id && id < objects.length) {
-            final int level = objects[id].level;
-            for (int i = id - 1; i >= 0; i--) {
-                if (objects[i].level < level) {
-                    return i;
-                }
+        final int level = objects[id].level;
+        for (int i = id - 1; i >= 0; i--) {
+            if (objects[i].level < level) {
+                return i;
             }
         }
         return -1;

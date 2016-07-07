@@ -49,12 +49,8 @@ public class OutlineDialog extends Dialog implements OnItemClickListener {
         if (bs != null) {
             final int currentIndex = bs.currentPage.docIndex;
             for (final OutlineLink item : outline) {
-                int targetIndex = item.targetPage - 1;
-                if (targetIndex <= currentIndex) {
-                    if (targetIndex >= 0) {
-                        current = item;
-                    }
-                } else {
+                if (currentIndex <= item.targetPage - 1) {
+                    current = item;
                     break;
                 }
             }

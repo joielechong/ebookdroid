@@ -24,10 +24,11 @@ import org.ebookdroid.ui.library.dialogs.FolderDlg;
 import org.ebookdroid.ui.library.tasks.CopyBookTask;
 import org.ebookdroid.ui.library.tasks.MoveBookTask;
 import org.ebookdroid.ui.library.tasks.RenameBookTask;
-import org.ebookdroid.ui.opds.OPDSActivity;
 import org.ebookdroid.ui.settings.SettingsUI;
 import org.ebookdroid.ui.viewer.ViewerActivity;
 
+import android.app.Activity;
+import android.content.Context;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.net.Uri;
@@ -39,20 +40,20 @@ import android.widget.ImageView;
 import android.widget.ProgressBar;
 
 import java.io.File;
-import java.util.Collection;
-import java.util.List;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.emdev.common.backup.BackupManager;
 import org.emdev.common.filesystem.FileExtensionFilter;
-import org.emdev.common.filesystem.MediaManager;
-import org.emdev.common.filesystem.MediaState;
-import org.emdev.ui.AbstractActivityController;
+import org.emdev.common.log.LogContext;
+import org.emdev.common.log.LogManager;
+import org.emdev.ui.AbstractActionActivity;
+import org.emdev.ui.actions.ActionController;
 import org.emdev.ui.actions.ActionDialogBuilder;
 import org.emdev.ui.actions.ActionEx;
-import org.emdev.ui.actions.ActionMenuHelper;
 import org.emdev.ui.actions.ActionMethod;
-import org.emdev.ui.actions.IActionController;
+import org.emdev.ui.actions.ActionMethodDef;
+import org.emdev.ui.actions.ActionTarget;
 import org.emdev.ui.actions.params.Constant;
 import org.emdev.ui.actions.params.EditableValue;
 import org.emdev.ui.uimanager.IUIManager;
@@ -60,10 +61,43 @@ import org.emdev.utils.CompareUtils;
 import org.emdev.utils.FileUtils;
 import org.emdev.utils.LengthUtils;
 
-public class RecentActivityController extends AbstractActivityController<RecentActivity> implements IBrowserActivity,
-        ILibSettingsChangeListener, IRecentBooksChangedListener, ICacheListener, MediaManager.Listener {
+@ActionTarget(
+// actions
+actions = {
+        // start
+        @ActionMethodDef(id = R.id.recentmenu_cleanrecent, method = "showClearRecentDialog"),
+        @ActionMethodDef(id = R.id.actions_clearRecent, method = "doClearRecent"),
+        @ActionMethodDef(id = R.id.bookmenu_removefromrecent, method = "removeBookFromRecents"),
+        @ActionMethodDef(id = R.id.bookmenu_cleardata, method = "removeCachedBookFiles"),
+        @ActionMethodDef(id = R.id.bookmenu_deletesettings, method = "removeBookSettings"),
+        @ActionMethodDef(id = R.id.recentmenu_searchBook, method = "showSearchDlg"),
+        @ActionMethodDef(id = R.id.actions_searchBook, method = "searchBook"),
+        @ActionMethodDef(id = R.id.mainmenu_settings, method = "showSettings"),
+        @ActionMethodDef(id = R.id.bookmenu_copy, method = "copyBook"),
+        @ActionMethodDef(id = R.id.bookmenu_move, method = "copyBook"),
+        @ActionMethodDef(id = R.id.actions_doCopyBook, method = "doCopyBook"),
+        @ActionMethodDef(id = R.id.actions_doMoveBook, method = "doMoveBook"),
+        @ActionMethodDef(id = R.id.bookmenu_rename, method = "renameBook"),
+        @ActionMethodDef(id = R.id.actions_doRenameBook, method = "doRenameBook"),
+        @ActionMethodDef(id = R.id.bookmenu_delete, method = "deleteBook"),
+        @ActionMethodDef(id = R.id.actions_doDeleteBook, method = "doDeleteBook"),
+        @ActionMethodDef(id = R.id.actions_goToBookmark, method = "openBook"),
+        @ActionMethodDef(id = R.id.bookmenu_settings, method = "openBookSettings"),
+        @ActionMethodDef(id = R.id.bookmenu_openbookfolder, method = "openBookFolder"),
+        @ActionMethodDef(id = R.id.recent_showbrowser, method = "goFileBrowser"),
+        @ActionMethodDef(id = R.id.recent_showlibrary, method = "goLibrary"),
+        @ActionMethodDef(id = R.id.recentmenu_backupsettings, method = "backupSettings"),
+        @ActionMethodDef(id = R.id.mainmenu_close, method = "close")
+// finish
+})
+public class RecentActivityController extends ActionController<RecentActivity> implements IBrowserActivity,
+        ILibSettingsChangeListener, IRecentBooksChangedListener, ICacheListener {
 
     public static final AtomicBoolean working = new AtomicBoolean();
+
+    public final LogContext LCTX;
+
+    private static final AtomicLong SEQ = new AtomicLong();
 
     private static final int CLEAR_RECENT_LIST = 0;
     private static final int DELETE_BOOKMARKS = 1;
@@ -76,54 +110,50 @@ public class RecentActivityController extends AbstractActivityController<RecentA
 
     private final ThumbnailFile def = CacheManager.getThumbnailFile(".");
 
-    private boolean recentLoaded = false;
-
     public RecentActivityController(final RecentActivity activity) {
-        super(activity, BEFORE_CREATE, AFTER_CREATE, ON_RESUME, ON_DESTROY);
+        super(activity);
+        LCTX = LogManager.root().lctx(this.getClass().getSimpleName(), true).lctx("" + SEQ.getAndIncrement());
         working.set(true);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.emdev.ui.AbstractActivityController#beforeCreate(android.app.Activity)
-     */
-    @Override
-    public void beforeCreate(final RecentActivity activity) {
-        super.beforeCreate(activity);
+    public void onCreate() {
+        if (LCTX.isDebugEnabled()) {
+            LCTX.d("onCreate(): " + getManagedComponent());
+        }
+        CacheManager.listeners.addListener(this);
 
         recentAdapter = new RecentAdapter(this);
         bookshelfAdapter = new BooksAdapter(this, recentAdapter);
         libraryAdapter = new LibraryAdapter(bookshelfAdapter);
 
-        CacheManager.listeners.addListener(this);
-        MediaManager.listeners.addListener(this);
         SettingsManager.addListener(this);
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.emdev.ui.AbstractActivityController#afterCreate(android.app.Activity, boolean)
-     */
-    @Override
-    public void afterCreate(final RecentActivity activity, final boolean recreated) {
 
         final LibSettings libSettings = LibSettings.current();
         LibSettings.applySettingsChanges(null, libSettings);
 
         final BookSettings recent = SettingsManager.getRecentBook();
 
-        if (!recreated) {
-            init();
-            recentLoaded = checkAutoLoad(libSettings, recent);
-            if (recentLoaded) {
-                return;
-            }
-            EBookDroidApp.checkInstalledFonts(getManagedComponent());
+        if (checkAutoLoad(libSettings, recent)) {
+            return;
         }
 
-        changeLibraryView(recent != null ? RecentActivity.VIEW_RECENT : RecentActivity.VIEW_LIBRARY);
+        int initialView = recent != null ? RecentActivity.VIEW_RECENT : RecentActivity.VIEW_LIBRARY;
+        getManagedComponent().showLibrary(libraryAdapter, recentAdapter, initialView);
+
+        EBookDroidApp.checkInstalledFonts(getManagedComponent());
+    }
+
+    public void onRestore(final RecentActivity activity) {
+        if (LCTX.isDebugEnabled()) {
+            LCTX.d("onRestore(): " + activity);
+        }
+        setManagedComponent(activity);
+
+        LibSettings.applySettingsChanges(null, LibSettings.current());
+
+        final BookSettings recent = SettingsManager.getRecentBook();
+        int initialView = recent != null ? RecentActivity.VIEW_RECENT : RecentActivity.VIEW_LIBRARY;
+        getManagedComponent().showLibrary(libraryAdapter, recentAdapter, initialView);
     }
 
     protected boolean checkAutoLoad(final LibSettings libSettings, final BookSettings recent) {
@@ -137,37 +167,45 @@ public class RecentActivityController extends AbstractActivityController<RecentA
         }
 
         if (shouldLoad && found) {
-            changeLibraryView(RecentActivity.VIEW_RECENT);
+            getManagedComponent().showLibrary(libraryAdapter, recentAdapter, RecentActivity.VIEW_RECENT);
             showDocument(Uri.fromFile(file), null);
             return true;
         }
         return false;
     }
 
-    protected void init() {
+    protected void onResume() {
+        if (LCTX.isDebugEnabled()) {
+            LCTX.d("onResume()");
+        }
+
         final LibSettings libSettings = LibSettings.current();
-        recentAdapter.setBooks(SettingsManager.getRecentBooks().values(), libSettings.allowedFileTypes);
-        bookshelfAdapter.startScan();
+        if (getManagedComponent().getViewMode() == RecentActivity.VIEW_RECENT) {
+            if (SettingsManager.getRecentBook() == null) {
+                changeLibraryView(RecentActivity.VIEW_LIBRARY);
+            } else {
+                recentAdapter.setBooks(SettingsManager.getRecentBooks().values(), libSettings.allowedFileTypes);
+            }
+        }
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.emdev.ui.AbstractActivityController#onDestroy(boolean)
-     */
-    @Override
-    public void onDestroy(final boolean finishing) {
+    protected void onPause() {
+        if (LCTX.isDebugEnabled()) {
+            LCTX.d("onPause()");
+        }
+    }
+
+    protected void onDestroy(final boolean finishing) {
+        if (LCTX.isDebugEnabled()) {
+            LCTX.d("onDestroy(): " + finishing);
+        }
+        if (finishing && BackupSettings.current().backupOnExit) {
+            BackupManager.backup();
+        }
         if (finishing) {
-            if (BackupSettings.current().backupOnExit) {
-                BackupManager.backup();
-            }
             working.set(false);
             bookshelfAdapter.onDestroy();
             CacheManager.listeners.removeListener(this);
-            SettingsManager.removeListener(this);
-            MediaManager.listeners.removeListener(this);
-
-            EBookDroidApp.onActivityClose(finishing);
         }
     }
 
@@ -208,7 +246,7 @@ public class RecentActivityController extends AbstractActivityController<RecentA
 
     @ActionMethod(ids = R.id.bookmenu_removefromrecent)
     public void removeBookFromRecents(final ActionEx action) {
-        final BookNode book = action.getParameter(ActionMenuHelper.MENU_ITEM_SOURCE);
+        final BookNode book = action.getParameter(AbstractActionActivity.MENU_ITEM_SOURCE);
         if (book != null) {
             SettingsManager.removeBookFromRecents(book.path);
             recentAdapter.removeBook(book);
@@ -218,7 +256,7 @@ public class RecentActivityController extends AbstractActivityController<RecentA
 
     @ActionMethod(ids = R.id.bookmenu_cleardata)
     public void removeCachedBookFiles(final ActionEx action) {
-        final BookNode book = action.getParameter(ActionMenuHelper.MENU_ITEM_SOURCE);
+        final BookNode book = action.getParameter(AbstractActionActivity.MENU_ITEM_SOURCE);
         if (book != null) {
             CacheManager.clear(book.path);
             recentAdapter.notifyDataSetInvalidated();
@@ -228,7 +266,7 @@ public class RecentActivityController extends AbstractActivityController<RecentA
 
     @ActionMethod(ids = R.id.bookmenu_deletesettings)
     public void removeBookSettings(final ActionEx action) {
-        final BookNode book = action.getParameter(ActionMenuHelper.MENU_ITEM_SOURCE);
+        final BookNode book = action.getParameter(AbstractActionActivity.MENU_ITEM_SOURCE);
         if (book != null) {
             final BookSettings bs = SettingsManager.getBookSettings(book.path);
             if (bs != null) {
@@ -260,11 +298,7 @@ public class RecentActivityController extends AbstractActivityController<RecentA
     public void searchBook(final ActionEx action) {
         final Editable value = action.getParameter("input");
         final String searchQuery = value.toString();
-        if (bookshelfAdapter.startSearch(searchQuery)) {
-            if (LibSettings.current().useBookcase) {
-                getManagedComponent().showBookshelf(BooksAdapter.SEARCH_INDEX);
-            }
-        }
+        bookshelfAdapter.startSearch(searchQuery);
     }
 
     @ActionMethod(ids = R.id.mainmenu_settings)
@@ -360,22 +394,28 @@ public class RecentActivityController extends AbstractActivityController<RecentA
         if (f.delete()) {
             CacheManager.clear(book.path);
             final LibSettings libSettings = LibSettings.current();
+            libraryAdapter.startScan();
             recentAdapter.setBooks(SettingsManager.getRecentBooks().values(), libSettings.allowedFileTypes);
         }
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.ebookdroid.ui.library.IBrowserActivity#setCurrentDir(java.io.File)
-     */
+    @Override
+    public Context getContext() {
+        return getManagedComponent();
+    }
+
+    @Override
+    public Activity getActivity() {
+        return getManagedComponent();
+    }
+
     @Override
     public void setCurrentDir(final File newDir) {
     }
 
     @ActionMethod(ids = { R.id.actions_goToBookmark })
     public void openBook(final ActionEx action) {
-        final BookNode book = action.getParameter(ActionMenuHelper.MENU_ITEM_SOURCE);
+        final BookNode book = action.getParameter(AbstractActionActivity.MENU_ITEM_SOURCE);
         final File file = new File(book.path);
         if (!file.isDirectory()) {
             final Bookmark b = action.getParameter("bookmark");
@@ -385,35 +425,19 @@ public class RecentActivityController extends AbstractActivityController<RecentA
 
     @ActionMethod(ids = R.id.bookmenu_settings)
     public void openBookSettings(final ActionEx action) {
-        final BookNode book = action.getParameter(ActionMenuHelper.MENU_ITEM_SOURCE);
+        final BookNode book = action.getParameter(AbstractActionActivity.MENU_ITEM_SOURCE);
         SettingsManager.create(0, book.path, false, null);
         SettingsUI.showBookSettings(getManagedComponent(), book.path);
     }
 
-    @ActionMethod(ids = R.id.bookmenu_openbookshelf)
-    public void openBookShelf(final ActionEx action) {
-        final BookNode book = action.getParameter(ActionMenuHelper.MENU_ITEM_SOURCE);
-        final BookShelfAdapter bookShelf = getBookShelf(book);
-        if (bookShelf != null) {
-            final int pos = bookshelfAdapter.getShelfPosition(bookShelf);
-            getManagedComponent().showBookshelf(pos);
-        }
-    }
-
     @ActionMethod(ids = R.id.bookmenu_openbookfolder)
     public void openBookFolder(final ActionEx action) {
-        final BookNode book = action.getParameter(ActionMenuHelper.MENU_ITEM_SOURCE);
+        final BookNode book = action.getParameter(AbstractActionActivity.MENU_ITEM_SOURCE);
         final Intent myIntent = new Intent(getManagedComponent(), BrowserActivity.class);
         myIntent.setData(Uri.fromFile(new File(book.path).getParentFile().getAbsoluteFile()));
         getManagedComponent().startActivity(myIntent);
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.ebookdroid.ui.library.IBrowserActivity#showDocument(android.net.Uri,
-     *      org.ebookdroid.common.settings.books.Bookmark)
-     */
     @Override
     public void showDocument(final Uri uri, final Bookmark b) {
         final Intent intent = new Intent(Intent.ACTION_VIEW, uri);
@@ -426,60 +450,19 @@ public class RecentActivityController extends AbstractActivityController<RecentA
         getManagedComponent().startActivity(intent);
     }
 
-    @ActionMethod(ids = R.id.ShelfCaption)
-    public void showSelectShelfDlg(final ActionEx action) {
-        final List<String> names = bookshelfAdapter.getListNames();
-
-        if (LengthUtils.isNotEmpty(names)) {
-            final ActionDialogBuilder builder = new ActionDialogBuilder(getContext(), this);
-            builder.setTitle(R.string.bookcase_shelves);
-            builder.setItems(names.toArray(new String[names.size()]), this.getOrCreateAction(R.id.actions_selectShelf));
-            builder.show();
-        }
-    }
-
-    @ActionMethod(ids = R.id.actions_selectShelf)
-    public void selectShelf(final ActionEx action) {
-        final Integer item = action.getParameter(IActionController.DIALOG_ITEM_PROPERTY);
-        getManagedComponent().showBookshelf(item);
-    }
-
-    @ActionMethod(ids = R.id.ShelfLeftButton)
-    public void selectPrevShelf(final ActionEx action) {
-        getManagedComponent().showPrevBookshelf();
-    }
-
-    @ActionMethod(ids = R.id.ShelfRightButton)
-    public void selectNextShelf(final ActionEx action) {
-        getManagedComponent().showNextBookshelf();
-    }
-
-    @ActionMethod(ids = { R.id.recent_showlibrary, R.id.recent_showrecent })
+    @ActionMethod(ids = { R.id.recent_showlibrary })
     public void goLibrary(final ActionEx action) {
-        if (!LibSettings.current().useBookcase) {
-            final int viewMode = getManagedComponent().getViewMode();
-            if (viewMode == RecentActivity.VIEW_RECENT) {
-                changeLibraryView(RecentActivity.VIEW_LIBRARY);
-            } else if (viewMode == RecentActivity.VIEW_LIBRARY) {
-                changeLibraryView(RecentActivity.VIEW_RECENT);
-            }
+        final int viewMode = getManagedComponent().getViewMode();
+        if (viewMode == RecentActivity.VIEW_RECENT) {
+            changeLibraryView(RecentActivity.VIEW_LIBRARY);
+        } else if (viewMode == RecentActivity.VIEW_LIBRARY) {
+            changeLibraryView(RecentActivity.VIEW_RECENT);
         }
     }
 
-    @ActionMethod(ids = { R.id.recent_showbrowser, R.id.recent_storage_all, R.id.recent_storage_external,
-            R.id.actions_storage })
+    @ActionMethod(ids = R.id.recent_showbrowser)
     public void goFileBrowser(final ActionEx action) {
         final Intent myIntent = new Intent(getManagedComponent(), BrowserActivity.class);
-        final String path = action.getParameter("path");
-        if (path != null) {
-            myIntent.setData(Uri.fromFile(new File(path)));
-        }
-        getManagedComponent().startActivity(myIntent);
-    }
-
-    @ActionMethod(ids = R.id.mainmenu_opds)
-    public void goOPDSBrowser(final ActionEx action) {
-        final Intent myIntent = new Intent(getManagedComponent(), OPDSActivity.class);
         getManagedComponent().startActivity(myIntent);
     }
 
@@ -518,11 +501,6 @@ public class RecentActivityController extends AbstractActivityController<RecentA
         }
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.ebookdroid.common.cache.CacheManager.ICacheListener#onThumbnailChanged(org.ebookdroid.common.cache.ThumbnailFile)
-     */
     @Override
     public void onThumbnailChanged(final ThumbnailFile tf) {
         getManagedComponent().runOnUiThread(new Runnable() {
@@ -541,11 +519,6 @@ public class RecentActivityController extends AbstractActivityController<RecentA
         });
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.ebookdroid.ui.library.IBrowserActivity#loadThumbnail(java.lang.String, android.widget.ImageView, int)
-     */
     @Override
     public void loadThumbnail(final String path, final ImageView imageView, final int defaultResID) {
         final ThumbnailFile newTF = CacheManager.getThumbnailFile(path);
@@ -564,55 +537,22 @@ public class RecentActivityController extends AbstractActivityController<RecentA
         });
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.ebookdroid.common.settings.listeners.ILibSettingsChangeListener#onLibSettingsChanged(org.ebookdroid.common.settings.LibSettings,
-     *      org.ebookdroid.common.settings.LibSettings, org.ebookdroid.common.settings.LibSettings.Diff)
-     */
     @Override
     public void onLibSettingsChanged(final LibSettings oldSettings, final LibSettings newSettings,
             final LibSettings.Diff diff) {
-        try {
-            final FileExtensionFilter filter = newSettings.allowedFileTypes;
-            if (diff.isUseBookcaseChanged()) {
-                recentAdapter.setBooks(SettingsManager.getRecentBooks().values(), filter);
-                if (newSettings.useBookcase) {
-                    getManagedComponent().showBookcase(bookshelfAdapter, recentAdapter);
-                } else {
-                    getManagedComponent().showLibrary(libraryAdapter, recentAdapter);
-                }
-                return;
-            }
+        final FileExtensionFilter filter = newSettings.allowedFileTypes;
 
-            if (diff.isAutoScanDirsChanged()) {
-                bookshelfAdapter.startScan();
-                return;
-            }
-            if (diff.isAllowedFileTypesChanged()) {
-                recentAdapter.setBooks(SettingsManager.getRecentBooks().values(), filter);
-                bookshelfAdapter.startScan();
-            }
-            if (diff.isAutoScanRemovableMediaChanged()) {
-                final Collection<String> media = MediaManager.getReadableMedia();
-                if (LengthUtils.isNotEmpty(media)) {
-                    if (newSettings.autoScanRemovableMedia) {
-                        bookshelfAdapter.startScan(media);
-                    } else {
-                        bookshelfAdapter.removeAll(media);
-                    }
-                }
-            }
-        } finally {
-            IUIManager.instance.invalidateOptionsMenu(getManagedComponent());
+        if (diff.isAllowedFileTypesChanged()) {
+            recentAdapter.setBooks(SettingsManager.getRecentBooks().values(), filter);
         }
+
+        if (diff.isAutoScanDirsChanged() || diff.isAllowedFileTypesChanged()) {
+            libraryAdapter.startScan();
+        }
+
+        IUIManager.instance.invalidateOptionsMenu(getManagedComponent());
     }
 
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.ebookdroid.common.settings.listeners.IRecentBooksChangedListener#onRecentBooksChanged()
-     */
     @Override
     public void onRecentBooksChanged() {
         getManagedComponent().runOnUiThread(new Runnable() {
@@ -626,8 +566,12 @@ public class RecentActivityController extends AbstractActivityController<RecentA
     }
 
     public void changeLibraryView(final int view) {
-        if (!LibSettings.current().useBookcase) {
-            getManagedComponent().changeLibraryView(view);
+        getManagedComponent().changeLibraryView(view);
+        if (view == RecentActivity.VIEW_LIBRARY) {
+            libraryAdapter.startScan();
+        } else {
+            final FileExtensionFilter filter = LibSettings.current().allowedFileTypes;
+            recentAdapter.setBooks(SettingsManager.getRecentBooks().values(), filter);
         }
     }
 
@@ -638,29 +582,5 @@ public class RecentActivityController extends AbstractActivityController<RecentA
 
     public BookShelfAdapter getBookShelf(final int index) {
         return bookshelfAdapter.getList(index);
-    }
-
-    /**
-     * {@inheritDoc}
-     *
-     * @see org.emdev.common.filesystem.MediaManager.Listener#onMediaStateChanged(java.lang.String,
-     *      org.emdev.common.filesystem.MediaState, org.emdev.common.filesystem.MediaState)
-     */
-    @Override
-    public void onMediaStateChanged(final String path, final MediaState oldState, final MediaState newState) {
-        if (newState.readable) {
-            if (oldState == null || !oldState.readable) {
-                if (LibSettings.current().autoScanRemovableMedia) {
-                    bookshelfAdapter.startScan(path);
-                }
-                IUIManager.instance.invalidateOptionsMenu(getManagedComponent());
-            }
-            return;
-        }
-
-        if (oldState != null && oldState.readable) {
-            bookshelfAdapter.removeAll(path);
-            IUIManager.instance.invalidateOptionsMenu(getManagedComponent());
-        }
     }
 }
