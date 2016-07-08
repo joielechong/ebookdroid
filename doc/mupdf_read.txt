@@ -1,6 +1,8 @@
 fz_lookup_base14_font(fz_context *ctx, const char *name, int *size)
 
 
+=========================================
+
 static pdf_font_desc *
 load_cid_font(fz_context *ctx, pdf_document *doc, pdf_obj *dict, pdf_obj *encoding, pdf_obj *to_unicode)
 {
@@ -8,6 +10,7 @@ load_cid_font(fz_context *ctx, pdf_document *doc, pdf_obj *dict, pdf_obj *encodi
 		pdf_load_font_descriptor(ctx, doc, fontdesc, descriptor, collection, basefont, 1);
 
 
+=========================================
 
 pdf_load_substitute_font(fz_context *ctx, pdf_font_desc *fontdesc, char *fontname, int mono, int serif, int bold, int italic)
 {
@@ -26,3 +29,56 @@ pdf_load_substitute_font(fz_context *ctx, pdf_font_desc *fontdesc, char *fontnam
 
 fz_new_font_from_file
 
+
+=========================================
+
+
+
+static fz_font *my_fz_load_system_font_func(fz_context *ctx, const char *fontname, int bold, int italic, int needs_exact_metrics)
+{
+    // EBD: load font from file >>>
+    fz_font *font = NULL;
+    fz_warn(ctx, "my_fz_load_system_font_func fz_new_font_from_file %s", fontname);
+    fz_try(ctx)
+    {
+        font = fz_new_font_from_file(ctx, fontname, fontname, 0, 1);
+    }
+    fz_catch(ctx)
+    {
+        fz_warn(ctx, "!!!pdf_load_substitute_cjk_font fz_new_font_from_file failed %s", fontname);
+        font = NULL;
+    }
+    // EBD: load font from file <<<
+    return font;
+}
+static fz_font *my_fz_load_system_cjk_font_func(fz_context *ctx, const char *fontname, int ros, int serif)
+{
+    // EBD: load font from file >>>
+    fz_font *font = NULL;
+    fz_warn(ctx, "my_fz_load_system_font_func fz_new_font_from_file %s", fontname);
+    fz_try(ctx)
+    {
+        font = fz_new_font_from_file(ctx, fontname, fontname, 0, 1);
+    }
+    fz_catch(ctx)
+    {
+        fz_warn(ctx, "!!!pdf_load_substitute_cjk_font fz_new_font_from_file failed %s", fontname);
+        font = NULL;
+    }
+    // EBD: load font from file <<<
+    return font;
+}
+
+void pdfapp_open_progressive(pdfapp_t *app, char *filename, int reload, int bps)
+{
+	fz_context *ctx = app->ctx;
+	char *password = "";
+
+	fz_try(ctx)
+	{
+        //FIXME:
+        fz_install_load_system_font_funcs(ctx, my_fz_load_system_font_func, my_fz_load_system_cjk_font_func);
+        
+        
+        
+=========================================
